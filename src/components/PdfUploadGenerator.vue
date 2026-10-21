@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import {
   Upload,
   FileText,
@@ -9,10 +9,15 @@ import {
   AlertCircle,
   KeyRound,
   Trash2,
-  Play
+  Play,
+  Layers
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
-import { extractPdfInBrowser, generateQuestionsInBrowser } from '../services/pdfAndAiClient'
+import {
+  extractPdfInBrowser,
+  generateQuestionsInBrowser,
+  type ExtractedPage
+} from '../services/pdfAndAiClient'
 
 const emit = defineEmits<{
   (e: 'openDeck', deckId: string): void
@@ -23,17 +28,33 @@ const { aiSettings, customDecks, getDeckQuestions, addGeneratedDeck, deleteCusto
 const isDragging = ref(false)
 const isExtracting = ref(false)
 const isGenerating = ref(false)
+const batchProgressText = ref<string>('')
+const batchProgressPercent = ref<number>(0)
 const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 
 const extractedFileName = ref<string>('')
 const extractedText = ref<string>('')
+const extractedPages = ref<ExtractedPage[]>([])
 const extractedPdfBase64 = ref<string | undefined>(undefined)
 const totalPages = ref<number>(0)
+
+// Seitenbereich-Auswahl & Smart-Chunking für große PDFs (z.B. 45 Seiten)
+const pageFrom = ref<number>(1)
+const pageTo = ref<number>(1)
+const useDeepChunking = ref<boolean>(false)
+const pagesPerChunk = ref<number>(10)
 
 const questionCount = ref<number>(15)
 const focusAreas = ref<string>('')
 const showApiConfig = ref<boolean>(false)
+
+const selectedPageCount = computed(() => Math.max(0, pageTo.value - pageFrom.value + 1))
+const estimatedChunks = computed(() =>
+  useDeepChunking.value && selectedPageCount.value > pagesPerChunk.value
+    ? Math.ceil(selectedPageCount.value / pagesPerChunk.value)
+    : 1
+)
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -60,14 +81,25 @@ async function handleDrop(event: DragEvent) {
   if (file) await processPdfFile(file)
 }
 
+function updateSelectedPagesText() {
+  if (extractedPages.value.length === 0) return
+  const from = Math.max(1, Math.min(pageFrom.value, totalPages.value))
+  const to = Math.max(from, Math.min(pageTo.value, totalPages.value))
+  pageFrom.value = from
+  pageTo.value = to
+
+  const slice = extractedPages.value.filter((p) => p.pageNumber >= from && p.pageNumber <= to)
+  extractedText.value = slice.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join('\n\n')
+}
+
 async function processPdfFile(file: File) {
   errorMessage.value = null
   successMessage.value = null
   isExtracting.value = true
   extractedFileName.value = file.name
+  extractedPages.value = []
 
   try {
-    // 1. Try local Bun Backend (/api/extract-pdf) if running
     const formData = new FormData()
     formData.append('file', file)
 
@@ -79,20 +111,34 @@ async function processPdfFile(file: File) {
     if (res && res.ok) {
       const data = await res.json()
       extractedText.value = data.fullText || ''
+      extractedPages.value = Array.isArray(data.pages) ? data.pages : []
       extractedPdfBase64.value = data.pdfBase64
       totalPages.value = data.totalPages || 1
+      pageFrom.value = 1
+      pageTo.value = totalPages.value
+      useDeepChunking.value = totalPages.value > 12
       return
     }
 
-    // 2. Browser-side extraction (for Vercel / Netlify / iPad static hosting!)
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      extractedPdfBase64.value = await fileToBase64(file)
+      if (file.size < 12 * 1024 * 1024) {
+        extractedPdfBase64.value = await fileToBase64(file)
+      } else {
+        extractedPdfBase64.value = undefined
+      }
       const parsed = await extractPdfInBrowser(file)
       extractedText.value = parsed.fullText
+      extractedPages.value = parsed.pages
       totalPages.value = parsed.totalPages
+      pageFrom.value = 1
+      pageTo.value = parsed.totalPages
+      useDeepChunking.value = parsed.totalPages > 12
     } else {
       extractedText.value = await file.text()
       totalPages.value = 1
+      pageFrom.value = 1
+      pageTo.value = 1
+      useDeepChunking.value = false
     }
   } catch (err: any) {
     errorMessage.value = err?.message || 'Fehler beim Extrahieren der PDF-Datei.'
@@ -122,6 +168,39 @@ function updateProviderModel(provider: 'gemini' | 'openai' | 'anthropic' | 'olla
   if (provider === 'ollama') aiSettings.value.model = 'llama3.1'
 }
 
+async function runSingleAiCall(chunkText: string, chunkLabel: string, count: number, includePdfBinary: boolean) {
+  const res = await fetch('/api/generate-questions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: chunkText,
+      pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
+      fileName: chunkLabel,
+      provider: aiSettings.value.provider,
+      apiKey: getActiveApiKey(),
+      model: aiSettings.value.model,
+      ollamaUrl: aiSettings.value.ollamaUrl,
+      questionCount: count,
+      focusAreas: focusAreas.value
+    })
+  }).catch(() => null)
+
+  if (res && res.ok) {
+    return await res.json()
+  }
+
+  return await generateQuestionsInBrowser({
+    text: chunkText,
+    pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
+    fileName: chunkLabel,
+    provider: aiSettings.value.provider,
+    apiKey: getActiveApiKey(),
+    model: aiSettings.value.model,
+    questionCount: count,
+    focusAreas: focusAreas.value
+  })
+}
+
 async function generateQuestionsFromContent() {
   if (!extractedText.value.trim() && !extractedPdfBase64.value) {
     errorMessage.value = 'Bitte lade zuerst eine PDF hoch oder füge Lerntext in das Textfeld ein.'
@@ -131,42 +210,87 @@ async function generateQuestionsFromContent() {
   errorMessage.value = null
   successMessage.value = null
   isGenerating.value = true
+  batchProgressText.value = ''
+  batchProgressPercent.value = 0
 
   try {
-    let data: any = null
+    // Fall A: Große PDF mit aktiviertem Tiefen-Modus (Seiten-Chunking in 10er-Blöcken)
+    const activePages = extractedPages.value.filter(
+      (p) => p.pageNumber >= pageFrom.value && p.pageNumber <= pageTo.value
+    )
 
-    // 1. Try local Bun Backend first
-    const res = await fetch('/api/generate-questions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: extractedText.value,
-        pdfBase64: aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
-        fileName: extractedFileName.value || 'Eigenes Skript',
-        provider: aiSettings.value.provider,
-        apiKey: getActiveApiKey(),
-        model: aiSettings.value.model,
-        ollamaUrl: aiSettings.value.ollamaUrl,
-        questionCount: questionCount.value,
-        focusAreas: focusAreas.value
-      })
-    }).catch(() => null)
+    if (useDeepChunking.value && activePages.length > pagesPerChunk.value) {
+      const chunks: ExtractedPage[][] = []
+      for (let i = 0; i < activePages.length; i += pagesPerChunk.value) {
+        chunks.push(activePages.slice(i, i + pagesPerChunk.value))
+      }
 
-    if (res && res.ok) {
-      data = await res.json()
-    } else {
-      // 2. Direct Browser AI Generation (works on Vercel / Netlify without backend!)
-      data = await generateQuestionsInBrowser({
-        text: extractedText.value,
-        pdfBase64: aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
-        fileName: extractedFileName.value || 'Eigenes Skript',
-        provider: aiSettings.value.provider,
-        apiKey: getActiveApiKey(),
-        model: aiSettings.value.model,
-        questionCount: questionCount.value,
-        focusAreas: focusAreas.value
+      const allCombinedQuestions: any[] = []
+      const allCombinedSummary: string[] = []
+      let mainTitle = extractedFileName.value.replace(/\.pdf$/i, '') || 'Großes PDF-Skript'
+      let mainDescription = ''
+
+      for (let idx = 0; idx < chunks.length; idx++) {
+        const chunk = chunks[idx]
+        const startP = chunk[0].pageNumber
+        const endP = chunk[chunk.length - 1].pageNumber
+        batchProgressText.value = `Analysiere Abschnitt ${idx + 1} von ${chunks.length} (Seite ${startP} bis ${endP})...`
+        batchProgressPercent.value = Math.round(((idx + 0.2) / chunks.length) * 100)
+
+        const chunkText = chunk.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join('\n\n')
+        const chunkResult = await runSingleAiCall(
+          chunkText,
+          `${extractedFileName.value} (S. ${startP}-${endP})`,
+          questionCount.value,
+          false // Bei Seiten-Blöcken nutzen wir den exakten Seitentext des jeweiligen Abschnitts
+        )
+
+        if (idx === 0 && chunkResult?.deckTitle) {
+          mainTitle = chunkResult.deckTitle
+          mainDescription = chunkResult.deckDescription || ''
+        }
+        if (Array.isArray(chunkResult?.summaryPoints)) {
+          allCombinedSummary.push(...chunkResult.summaryPoints)
+        }
+        if (Array.isArray(chunkResult?.questions)) {
+          const taggedQuestions = chunkResult.questions.map((q: any) => ({
+            ...q,
+            lawReference: q.lawReference ? `${q.lawReference} (S. ${startP}–${endP})` : `Skript S. ${startP}–${endP}`
+          }))
+          allCombinedQuestions.push(...taggedQuestions)
+        }
+
+        batchProgressPercent.value = Math.round(((idx + 1) / chunks.length) * 100)
+      }
+
+      if (allCombinedQuestions.length === 0) {
+        throw new Error('Die KI konnte keine Fragen aus den Abschnitten generieren.')
+      }
+
+      const createdDeck = await addGeneratedDeck({
+        deckTitle: `${mainTitle} (S. ${pageFrom.value}–${pageTo.value})`,
+        deckDescription:
+          mainDescription ||
+          `Tiefen-Analyse aus ${activePages.length} Seiten (${chunks.length} Abschnitte) mit insgesamt ${allCombinedQuestions.length} Fragen.`,
+        sourceFileName: `${extractedFileName.value} (S. ${pageFrom.value}–${pageTo.value})`,
+        summaryPoints: allCombinedSummary.slice(0, 20),
+        questions: allCombinedQuestions
       })
+
+      successMessage.value = `Stark! Aus allen ${activePages.length} Seiten (${chunks.length} Abschnitte) wurde das Deck „${createdDeck.title}“ mit insgesamt ${allCombinedQuestions.length} tiefgehenden Prüfungsfragen & Karteikarten erstellt!`
+      return
     }
+
+    // Fall B: Standard-Modus (einzelner Durchlauf)
+    batchProgressText.value = 'KI analysiert das Dokument und erstellt Prüfungsfragen...'
+    batchProgressPercent.value = 50
+
+    const data = await runSingleAiCall(
+      extractedText.value,
+      extractedFileName.value || 'Eigenes Skript',
+      questionCount.value,
+      totalPages.value <= 20
+    )
 
     if (!Array.isArray(data?.questions) || data.questions.length === 0) {
       throw new Error('Die KI hat keine gültigen Fragen zurückgegeben. Bitte versuche es erneut.')
@@ -186,6 +310,8 @@ async function generateQuestionsFromContent() {
     showApiConfig.value = true
   } finally {
     isGenerating.value = false
+    batchProgressText.value = ''
+    batchProgressPercent.value = 0
   }
 }
 </script>
@@ -199,10 +325,10 @@ async function generateQuestionsFromContent() {
           <span class="text-xs font-bold uppercase tracking-wider text-amber-400">PDF-zu-Prüfungsfragen Generator</span>
           <h2 class="text-xl font-extrabold text-white flex items-center gap-2">
             <Sparkles class="w-6 h-6 text-amber-400" />
-            Neue Skripte & PDFs hochladen
+            Neue Skripte & PDFs hochladen (auch 45+ Seiten!)
           </h2>
           <p class="text-sm text-slate-400 max-w-2xl">
-            Lade beliebige PDF-Skripte aus der MTR-Ausbildung (Strahlenschutz, Röntgentechnik, Nuklearmedizin, Strahlentherapie, Anatomie) hoch. Das Bun-Backend extrahiert den Text und erstellt automatisch Multiple-Choice-Fragen, Eselsbrücken und Anki-Karteikarten.
+            Lade beliebige PDF-Skripte aus der MTR-Ausbildung hoch. Bei großen Skripten (z. B. 45 Seiten) teilt der automatische <strong>Tiefen-Modus</strong> das Dokument in 10-Seiten-Abschnitte auf, damit keine einzige Seite übersprungen wird!
           </p>
         </div>
 
@@ -245,7 +371,7 @@ async function generateQuestionsFromContent() {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div v-if="aiSettings.provider === 'gemini'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Google Gemini API-Key (oder in .env als GEMINI_API_KEY)</label>
+            <label class="text-xs font-semibold text-slate-300">Google Gemini API-Key (oder in Netlify als VITE_GEMINI_API_KEY)</label>
             <input
               v-model="aiSettings.geminiKey"
               type="password"
@@ -255,7 +381,7 @@ async function generateQuestionsFromContent() {
           </div>
 
           <div v-if="aiSettings.provider === 'openai'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">OpenAI API-Key (oder in .env als OPENAI_API_KEY)</label>
+            <label class="text-xs font-semibold text-slate-300">OpenAI API-Key (oder in Netlify als VITE_OPENAI_API_KEY)</label>
             <input
               v-model="aiSettings.openaiKey"
               type="password"
@@ -265,7 +391,7 @@ async function generateQuestionsFromContent() {
           </div>
 
           <div v-if="aiSettings.provider === 'anthropic'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Anthropic API-Key (oder in .env als ANTHROPIC_API_KEY)</label>
+            <label class="text-xs font-semibold text-slate-300">Anthropic API-Key</label>
             <input
               v-model="aiSettings.anthropicKey"
               type="password"
@@ -293,9 +419,6 @@ async function generateQuestionsFromContent() {
             />
           </div>
         </div>
-        <p class="text-xs text-slate-500">
-          Hinweis: Dein API-Key wird ausschließlich lokal in deinem Browser (LocalStorage) gespeichert und direkt an das lokale Bun-Backend übergeben.
-        </p>
       </div>
 
       <!-- PDF Dropzone -->
@@ -318,10 +441,10 @@ async function generateQuestionsFromContent() {
           </div>
           <div>
             <div class="text-base font-bold text-white">
-              {{ isExtracting ? 'PDF wird gelesen und analysiert...' : 'PDF-Skript hierher ziehen oder klicken zum Auswählen' }}
+              {{ isExtracting ? 'PDF wird gelesen und analysiert...' : 'PDF-Skript hierher ziehen oder antippen zum Auswählen' }}
             </div>
             <div class="text-xs text-slate-400 mt-1">
-              Unterstützt mehrseitige PDF-Skripte, Vorlesungsfolien und Zusammenfassungen (bis 50 MB)
+              Egal ob 5 Seiten oder 60 Seiten – alle Seiten werden direkt ausgelesen
             </div>
           </div>
           <div v-if="extractedFileName" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
@@ -331,6 +454,63 @@ async function generateQuestionsFromContent() {
         </div>
       </label>
 
+      <!-- Multi-Page Range & Smart Chunking Controls (Visible when PDF has multiple pages) -->
+      <div
+        v-if="totalPages > 1"
+        class="bg-slate-950/90 border border-amber-500/30 rounded-2xl p-5 space-y-4"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-0.5">
+            <div class="text-sm font-bold text-white flex items-center gap-2">
+              <Layers class="w-4 h-4 text-amber-400" />
+              <span>Seiten-Auswahl & Tiefen-Modus ({{ totalPages }} Seiten erkannt)</span>
+            </div>
+            <p class="text-xs text-slate-400">
+              Du kannst entweder das gesamte Skript oder nur bestimmte Seiten (z. B. Seite 1–15) auswählen.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-slate-400">Von Seite</span>
+            <input
+              v-model.number="pageFrom"
+              @change="updateSelectedPagesText"
+              type="number"
+              min="1"
+              :max="totalPages"
+              class="w-16 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-center font-bold text-white"
+            />
+            <span class="text-slate-400">bis</span>
+            <input
+              v-model.number="pageTo"
+              @change="updateSelectedPagesText"
+              type="number"
+              :min="pageFrom"
+              :max="totalPages"
+              class="w-16 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-center font-bold text-white"
+            />
+          </div>
+        </div>
+
+        <label class="flex items-start gap-3 cursor-pointer select-none pt-2 border-t border-slate-800/80">
+          <input
+            type="checkbox"
+            v-model="useDeepChunking"
+            class="accent-amber-500 rounded mt-1"
+          />
+          <div class="text-xs space-y-0.5">
+            <div class="font-bold text-amber-300">
+              Tiefen-Modus für große PDFs aktivieren (Automatisch in {{ pagesPerChunk }}-Seiten-Blöcken analysieren)
+            </div>
+            <div class="text-slate-400">
+              Verhindert, dass die KI bei {{ selectedPageCount }} Seiten Details überspringt: Das Skript wird in
+              <strong class="text-white">{{ estimatedChunks }} Abschnitten</strong> analysiert und erzeugt ca.
+              <strong class="text-emerald-400">{{ estimatedChunks * questionCount }} detaillierte Prüfungsfragen</strong>.
+            </div>
+          </div>
+        </label>
+      </div>
+
       <!-- Extracted Text Preview / Direct Paste Area -->
       <div class="space-y-3">
         <div class="flex items-center justify-between">
@@ -338,12 +518,12 @@ async function generateQuestionsFromContent() {
             Extrahierter PDF-Text / Oder eigenen Lerntext direkt einfügen:
           </label>
           <span v-if="extractedText" class="text-xs text-slate-500">
-            {{ extractedText.length.toLocaleString('de-DE') }} Zeichen
+            {{ extractedText.length.toLocaleString('de-DE') }} Zeichen ({{ selectedPageCount || 1 }} Seiten)
           </span>
         </div>
         <textarea
           v-model="extractedText"
-          rows="7"
+          rows="6"
           placeholder="Nach dem PDF-Upload erscheint hier der gesamte erkannte Text (du kannst hier auch direkt beliebige Abschnitte aus Word/PDF reinkopieren)..."
           class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono leading-relaxed"
         />
@@ -352,15 +532,16 @@ async function generateQuestionsFromContent() {
       <!-- Generation Options -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
         <div class="space-y-1.5">
-          <label class="text-xs font-semibold text-slate-300">Anzahl zu generierender Fragen</label>
+          <label class="text-xs font-semibold text-slate-300">
+            {{ estimatedChunks > 1 ? `Fragen pro ${pagesPerChunk}-Seiten-Block` : 'Anzahl zu generierender Fragen' }}
+          </label>
           <select
             v-model.number="questionCount"
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
           >
-            <option :value="8">8 Fragen (Schnell-Check)</option>
-            <option :value="15">15 Fragen (Standard-Kapitel)</option>
-            <option :value="25">25 Fragen (Großes Skript)</option>
-            <option :value="35">35 Fragen (Intensiv-Prüfung)</option>
+            <option :value="10">10 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${10 * estimatedChunks})` : '' }}</option>
+            <option :value="15">15 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${15 * estimatedChunks})` : '(Empfohlen)' }}</option>
+            <option :value="20">20 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${20 * estimatedChunks})` : '' }}</option>
           </select>
         </div>
 
@@ -371,6 +552,23 @@ async function generateQuestionsFromContent() {
             type="text"
             placeholder="z.B. Fokus auf Grenzwerte, Fristen, Rechenaufgaben und Fallbeispiele fürs Examen..."
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+      </div>
+
+      <!-- Live Batch Progress Bar -->
+      <div v-if="isGenerating && batchProgressText" class="bg-slate-950 border border-amber-500/40 rounded-2xl p-4 space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-amber-300">
+          <span class="flex items-center gap-2">
+            <Loader2 class="w-4 h-4 animate-spin" />
+            {{ batchProgressText }}
+          </span>
+          <span>{{ batchProgressPercent }}%</span>
+        </div>
+        <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+          <div
+            class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300"
+            :style="{ width: `${batchProgressPercent}%` }"
           />
         </div>
       </div>
@@ -403,7 +601,13 @@ async function generateQuestionsFromContent() {
           <Loader2 v-if="isGenerating" class="w-5 h-5 animate-spin" />
           <Sparkles v-else class="w-5 h-5" />
           <span>
-            {{ isGenerating ? 'KI erstellt Prüfungsfragen & Karteikarten...' : `${questionCount} Prüfungsfragen & Karteikarten generieren` }}
+            {{
+              isGenerating
+                ? 'KI arbeitet...'
+                : estimatedChunks > 1
+                  ? `Tiefen-Analyse starten (~${estimatedChunks * questionCount} Fragen aus ${selectedPageCount} Seiten)`
+                  : `${questionCount} Prüfungsfragen & Karteikarten generieren`
+            }}
           </span>
         </button>
       </div>

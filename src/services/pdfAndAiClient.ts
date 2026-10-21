@@ -1,8 +1,8 @@
 import { extractText, getDocumentProxy } from 'unpdf'
 
-export const SYSTEM_PROMPT = `Du bist ein erfahrener Prüfer und Fachdozent für Radiologie, Strahlenschutz (StrlSchG, StrlSchV), Dosimetrie, Nuklearmedizin, Strahlentherapie und Röntgendiagnostik für die MTR-Ausbildung (Medizinische Technologinnen und Technologen für Radiologie) in Deutschland.
+export const SYSTEM_PROMPT = `Du bist ein erfahrener Prüfer und Fachdozent für Radiologie, Strahlenschutz (StrlSchG, StrlSchV), Dosimetrie, Nuklearmedizin, Strahlentherapie, Einstelltechnik und Röntgendiagnostik für die MTR-Ausbildung (Medizinische Technologinnen und Technologen für Radiologie) in Deutschland.
 
-Deine Aufgabe: Erstelle aus dem bereitgestellten Lernskript / PDF-Inhalt hochwertige, prüfungsnahe Lernfragen UND Karteikarten (Flashcards).
+Deine Aufgabe: Erstelle aus dem bereitgestellten Lernskript / PDF-Abschnitt hochwertige, prüfungsnahe Lernfragen UND Karteikarten (Flashcards). Deck alle wichtigen Fakten, Zahlen, Tabellen, Paragraphen und Zusammenhänge dieses Abschnitts gründlich ab!
 Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt in folgendem Schema (ohne Markdown-Codeblöcke drumherum, reines JSON):
 {
   "deckTitle": "Kurzer prägnanter Titel des Themenblocks",
@@ -23,7 +23,7 @@ Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt in folgendem Schema (ohne
       "correctIndex": 0,
       "explanation": "Ausführliche, leicht verständliche Erklärung, warum diese Antwort richtig ist und warum die anderen falsch sind.",
       "mnemonic": "Kurze Eselsbrücke oder Merkhilfe zum schnellen Einprägen",
-      "lawReference": "z.B. § 78 StrlSchG / StrlSchV (optional)",
+      "lawReference": "z.B. § 78 StrlSchG / Seite im Skript (optional)",
       "difficulty": "leicht",
       "type": "mc",
       "flashcardFront": "Kompakte Frage für die Karteikarten-Vorderseite",
@@ -45,22 +45,34 @@ export function cleanJsonResponse(raw: string): any {
   return JSON.parse(cleaned)
 }
 
+export interface ExtractedPage {
+  pageNumber: number
+  text: string
+}
+
 export async function extractPdfInBrowser(file: File): Promise<{
   fullText: string
   totalPages: number
+  pages: ExtractedPage[]
 }> {
   const arrayBuffer = await file.arrayBuffer()
   const uint8 = new Uint8Array(arrayBuffer)
   const pdf = await getDocumentProxy(uint8)
   const { totalPages, text } = await extractText(pdf, { mergePages: false })
 
-  const pages = Array.isArray(text)
-    ? text.map((pageText, idx) => `--- Seite ${idx + 1} ---\n${pageText.trim()}`)
-    : [`--- Seite 1 ---\n${String(text).trim()}`]
+  const pages: ExtractedPage[] = Array.isArray(text)
+    ? text.map((pageText, idx) => ({
+        pageNumber: idx + 1,
+        text: pageText.trim()
+      }))
+    : [{ pageNumber: 1, text: String(text).trim() }]
+
+  const fullText = pages.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join('\n\n')
 
   return {
-    fullText: pages.join('\n\n'),
-    totalPages
+    fullText,
+    totalPages,
+    pages
   }
 }
 
@@ -74,7 +86,7 @@ export async function generateQuestionsInBrowser(params: {
   questionCount: number
   focusAreas?: string
 }) {
-  const count = Math.min(Math.max(Number(params.questionCount) || 12, 3), 35)
+  const count = Math.min(Math.max(Number(params.questionCount) || 12, 3), 25)
 
   if (params.provider === 'gemini') {
     if (!params.apiKey) {
@@ -84,7 +96,8 @@ export async function generateQuestionsInBrowser(params: {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${params.apiKey}`
 
     const parts: any[] = []
-    if (params.pdfBase64) {
+    // Nur Base64 anhängen, wenn es kleiner als ~14 MB Base64 (~10 MB PDF) ist, um Geminis 20MB inline_data Limit nicht zu reißen
+    if (params.pdfBase64 && params.pdfBase64.length < 14_000_000) {
       parts.push({
         inline_data: {
           mime_type: 'application/pdf',
@@ -107,6 +120,7 @@ export async function generateQuestionsInBrowser(params: {
         contents: [{ role: 'user', parts }],
         generationConfig: {
           temperature: 0.4,
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json'
         }
       })
