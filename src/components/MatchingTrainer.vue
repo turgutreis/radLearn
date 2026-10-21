@@ -55,7 +55,7 @@ function selectRight(pair: MatchingPair) {
     matchedIds.value = next
     selectedLeftId.value = null
     if (next.size === currentPairs.value.length) {
-      rewardMatchingRound()
+      rewardMatchingRound(mistakes.value)
     }
   } else {
     mistakes.value++

@@ -74,12 +74,15 @@ function buildQuestionList() {
   activeQuestions.value = list
 }
 
+const recordedInSession = ref<Set<string>>(new Set())
+
 function restartQuiz() {
   buildQuestionList()
   currentIndex.value = 0
   selectedOption.value = null
   isRevealed.value = false
   sessionAnswers.value = {}
+  recordedInSession.value = new Set()
   isFinished.value = false
 }
 
@@ -100,7 +103,10 @@ function selectAnswer(idx: number) {
   if (!examMode.value) {
     isRevealed.value = true
     sessionAnswers.value[currentQuestion.value.id] = { selected: idx, correct: isCorrect }
-    recordAnswer(currentQuestion.value.id, isCorrect)
+    if (!recordedInSession.value.has(currentQuestion.value.id)) {
+      recordedInSession.value.add(currentQuestion.value.id)
+      recordAnswer(currentQuestion.value.id, isCorrect)
+    }
   } else {
     sessionAnswers.value[currentQuestion.value.id] = { selected: idx, correct: isCorrect }
   }
@@ -111,7 +117,10 @@ function nextQuestion() {
 
   if (examMode.value && selectedOption.value !== null) {
     const isCorrect = selectedOption.value === currentQuestion.value.correctIndex
-    recordAnswer(currentQuestion.value.id, isCorrect)
+    if (!recordedInSession.value.has(currentQuestion.value.id)) {
+      recordedInSession.value.add(currentQuestion.value.id)
+      recordAnswer(currentQuestion.value.id, isCorrect)
+    }
   }
 
   if (currentIndex.value < activeQuestions.value.length - 1) {

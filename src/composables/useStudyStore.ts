@@ -21,57 +21,57 @@ const STORAGE_KEYS = {
   CUSTOM_DECKS: 'radlearn_custom_decks_v1',
   CUSTOM_QUESTIONS: 'radlearn_custom_questions_v1',
   PROGRESS: 'radlearn_progress_v1',
-  PROFILE: 'radlearn_user_profile_v1',
+  PROFILE: 'radlearn_user_profile_v2', // v2 = Strengeres Punkte- & Preis-Balancing!
   AI_SETTINGS: 'radlearn_ai_settings_v1',
   SUPABASE_CONFIG: 'radlearn_supabase_config_v1'
 }
 
-const DEFAULT_REWARDS: RewardItem[] = [
+export const DEFAULT_REWARDS: RewardItem[] = [
   {
     id: 'rew-coffee',
     title: 'Lieblings-Kaffee & süßes Teilchen',
-    description: 'Frisch vom Ehemann direkt an den Schreibtisch oder ans Bett serviert.',
-    cost: 150,
+    description: 'Frisch vom Ehemann direkt an den Schreibtisch oder ans Bett serviert (~50 richtige Fragen).',
+    cost: 250,
     emoji: '☕',
     redeemedCount: 0
   },
   {
     id: 'rew-massage',
     title: '30 Min. Nacken- & Rückenmassage',
-    description: 'Entspannung pur nach einem langen Lerntag im Strahlenschutz.',
-    cost: 350,
+    description: 'Entspannung pur nach mehreren intensiven Lerntagen (~120 richtige Fragen).',
+    cost: 600,
     emoji: '💆‍♀️',
     redeemedCount: 0
   },
   {
     id: 'rew-movie',
     title: 'Kino- oder Serienabend deiner Wahl',
-    description: 'Du bestimmst den Film/die Serie + Lieblingssnacks ohne Diskussion!',
-    cost: 500,
+    description: 'Du bestimmst den Film/die Serie + Lieblingssnacks (~200 richtige Fragen).',
+    cost: 1000,
     emoji: '🎬',
     redeemedCount: 0
   },
   {
     id: 'rew-sushi',
     title: 'Großes Sushi-Date (All you can eat!)',
-    description: 'Schickes Sushi-Essen gehen (oder bestellen) komplett auf meinen Nacken!',
-    cost: 800,
+    description: 'Schickes Sushi-Essen gehen komplett auf meinen Nacken (~360 richtige Fragen)!',
+    cost: 1800,
     emoji: '🍣',
     redeemedCount: 0
   },
   {
     id: 'rew-shopping',
     title: 'Wunsch-Gutschein / Shopping-Treat',
-    description: 'Eine schöne Belohnung von deiner Wunschliste für deinen Fleiß.',
-    cost: 1200,
+    description: 'Eine schöne Belohnung von deiner Wunschliste für langes Durchhalten (~600 richtige Fragen).',
+    cost: 3000,
     emoji: '🛍️',
     redeemedCount: 0
   },
   {
     id: 'rew-wellness',
     title: 'Wellness-Tag / Thermen-Ausflug zu zweit',
-    description: 'Ein ganzer Tag Abschalten & Genießen nach der bestandenen Prüfung!',
-    cost: 2000,
+    description: 'Ein ganzer Tag Abschalten & Genießen als großes Examens-Ziel (~1.000 richtige Fragen)!',
+    cost: 5000,
     emoji: '🧖‍♀️',
     redeemedCount: 0
   }
@@ -83,7 +83,7 @@ const DEFAULT_PROFILE: UserProfile = {
   spentCoins: 0,
   streakDays: 0,
   lastStudyDate: '',
-  dailyGoal: 15,
+  dailyGoal: 25,
   todayAnsweredCount: 0,
   rewards: DEFAULT_REWARDS,
   vouchers: []
@@ -109,17 +109,58 @@ function getYesterdayIso(): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Stellt sicher, dass alte (zu billige) Standardpreise auf das neue, anspruchsvollere Balancing gehoben werden
+function migrateRewardsList(rewards: RewardItem[]): RewardItem[] {
+  const defaultMap = new Map(DEFAULT_REWARDS.map((r) => [r.id, r]))
+  if (!Array.isArray(rewards) || rewards.length === 0) return DEFAULT_REWARDS
+  return rewards.map((item) => {
+    const def = defaultMap.get(item.id)
+    if (def && item.cost < def.cost) {
+      return {
+        ...item,
+        cost: def.cost,
+        description: def.description
+      }
+    }
+    return item
+  })
+}
+
+// Berechnet faire Maximal-XP anhand der tatsächlich richtig gelösten Fragen in progressMap
+function recalculateFairXp(
+  currentXp: number,
+  progMap: Record<string, QuestionProgress>
+): number {
+  let totalCorrectAnswers = 0
+  let uniqueMastered = 0
+  for (const p of Object.values(progMap)) {
+    if (!p || typeof p !== 'object') continue
+    totalCorrectAnswers += p.correctCount || 0
+    if ((p.correctCount || 0) > 0) uniqueMastered += 1
+  }
+  // Pro erstmalig richtiger Frage 5 Pkt + für jede weitere richtige Wiederholung 2 Pkt (+ kleiner Puffer für Zuordnungen)
+  const fairMaxXp = uniqueMastered * 3 + totalCorrectAnswers * 2 + 15
+  if (currentXp > fairMaxXp && totalCorrectAnswers < 40) {
+    return Math.max(0, uniqueMastered * 3 + totalCorrectAnswers * 2)
+  }
+  return currentXp
+}
+
 const envMeta = (import.meta as any).env || {}
 
 const customDecks = ref<StudyDeck[]>(loadJson(STORAGE_KEYS.CUSTOM_DECKS, []))
 const customQuestions = ref<Question[]>(loadJson(STORAGE_KEYS.CUSTOM_QUESTIONS, []))
 const progressMap = ref<Record<string, QuestionProgress>>(loadJson(STORAGE_KEYS.PROGRESS, {}))
+
+const loadedProfile = loadJson(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE)
 const userProfile = ref<UserProfile>({
   ...DEFAULT_PROFILE,
-  ...loadJson(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE)
+  ...loadedProfile,
+  dailyGoal: 25,
+  xp: recalculateFairXp(loadedProfile.xp || 0, progressMap.value),
+  rewards: migrateRewardsList(loadedProfile.rewards)
 })
 
-// Tageszähler zurücksetzen, falls ein neuer Tag begonnen hat
 const today = getTodayIso()
 if (userProfile.value.lastStudyDate && userProfile.value.lastStudyDate !== today) {
   userProfile.value.todayAnsweredCount = 0
@@ -136,11 +177,9 @@ const aiSettings = ref<AISettings>(
   })
 )
 
-// Automatische Migration, falls im LocalStorage noch das veraltete gemini-2.5-flash gespeichert war
 if (aiSettings.value.provider === 'gemini' && aiSettings.value.model === 'gemini-2.5-flash') {
   aiSettings.value.model = 'gemini-3.8-flash'
 }
-
 if (!aiSettings.value.geminiKey && envMeta.VITE_GEMINI_API_KEY) {
   aiSettings.value.geminiKey = envMeta.VITE_GEMINI_API_KEY
 }
@@ -180,11 +219,11 @@ watch(supabaseConfig, (val) => localStorage.setItem(STORAGE_KEYS.SUPABASE_CONFIG
 export const LEVEL_TIERS = [
   { level: 1, title: 'Strahlenschutz-Starterin', minXp: 0, badge: '🌱' },
   { level: 2, title: 'Dosimeter-Trägerin', minXp: 150, badge: '📟' },
-  { level: 3, title: 'Röntgen-Kennerin', minXp: 350, badge: '⚡' },
-  { level: 4, title: 'Kontrollbereich-Profi', minXp: 650, badge: '☢️' },
-  { level: 5, title: 'ALARA-Meisterin', minXp: 1000, badge: '🛡️' },
-  { level: 6, title: 'SSB-Ehrenrang', minXp: 1500, badge: '🏅' },
-  { level: 7, title: 'MTR-Examens-Queen', minXp: 2200, badge: '👑' }
+  { level: 3, title: 'Röntgen-Kennerin', minXp: 400, badge: '⚡' },
+  { level: 4, title: 'Kontrollbereich-Profi', minXp: 800, badge: '☢️' },
+  { level: 5, title: 'ALARA-Meisterin', minXp: 1400, badge: '🛡️' },
+  { level: 6, title: 'SSB-Ehrenrang', minXp: 2200, badge: '🏅' },
+  { level: 7, title: 'MTR-Examens-Queen', minXp: 3500, badge: '👑' }
 ]
 
 export function useStudyStore() {
@@ -211,10 +250,10 @@ export function useStudyStore() {
     if (xpGainTimer) clearTimeout(xpGainTimer)
     xpGainTimer = setTimeout(() => {
       lastXpGain.value = null
-    }, 2600)
+    }, 2200)
   }
 
-  function addStudyActivityAndXp(xpEarned: number, reason: string) {
+  function addStudyActivityAndXp(xpEarned: number, reason: string, countTowardsDailyGoal = true) {
     const todayStr = getTodayIso()
     const yesterdayStr = getYesterdayIso()
 
@@ -228,13 +267,18 @@ export function useStudyStore() {
       userProfile.value.todayAnsweredCount = 0
     }
 
-    userProfile.value.todayAnsweredCount += 1
+    if (countTowardsDailyGoal) {
+      userProfile.value.todayAnsweredCount += 1
+    }
 
-    // Tagesziel-Bonus beim genauen Erreichen des Tagesziels!
     let totalGain = xpEarned
-    if (userProfile.value.todayAnsweredCount === userProfile.value.dailyGoal) {
-      totalGain += 50
-      triggerXpToast(totalGain, `Tagesziel erreicht! +50 Bonus-Punkte 🎉`)
+    // Tagesziel-Bonus (+15 Punkte) erst bei 25 richtig beantworteten Fragen am Tag!
+    if (
+      countTowardsDailyGoal &&
+      userProfile.value.todayAnsweredCount === userProfile.value.dailyGoal
+    ) {
+      totalGain += 15
+      triggerXpToast(totalGain, `Tagesziel (${userProfile.value.dailyGoal} richtige Fragen) erreicht! +15 Bonus-Punkte 🎉`)
     } else if (xpEarned > 0) {
       triggerXpToast(xpEarned, reason)
     }
@@ -242,7 +286,6 @@ export function useStudyStore() {
     userProfile.value.xp += totalGain
   }
 
-  // Verfügbare Belohnungs-Punkte (Coins) = Gesamt-XP minus bereits eingelöste Punkte
   const availableCoins = computed(() =>
     Math.max(0, userProfile.value.xp - (userProfile.value.spentCoins || 0))
   )
@@ -309,19 +352,6 @@ export function useStudyStore() {
 
       const cloudProgRaw = (await fetchCloudProgress(supabaseConfig.value)) as any
       if (cloudProgRaw) {
-        // Profil-Daten aus _profile Key extrahieren, falls vorhanden
-        if (cloudProgRaw._profile) {
-          const remoteProf = cloudProgRaw._profile as UserProfile
-          if ((remoteProf.xp || 0) >= (userProfile.value.xp || 0)) {
-            userProfile.value = {
-              ...DEFAULT_PROFILE,
-              ...remoteProf,
-              rewards: Array.isArray(remoteProf.rewards) && remoteProf.rewards.length > 0 ? remoteProf.rewards : userProfile.value.rewards,
-              vouchers: Array.isArray(remoteProf.vouchers) ? remoteProf.vouchers : userProfile.value.vouchers
-            }
-          }
-        }
-
         const merged: Record<string, QuestionProgress> = {}
         for (const [key, val] of Object.entries(cloudProgRaw)) {
           if (key === '_profile') continue
@@ -339,6 +369,24 @@ export function useStudyStore() {
           }
         }
         progressMap.value = merged
+
+        if (cloudProgRaw._profile) {
+          const remoteProf = cloudProgRaw._profile as UserProfile
+          const rawXp = Math.max(remoteProf.xp || 0, userProfile.value.xp || 0)
+          const calibratedXp = recalculateFairXp(rawXp, merged)
+          userProfile.value = {
+            ...DEFAULT_PROFILE,
+            ...remoteProf,
+            dailyGoal: 25,
+            xp: calibratedXp,
+            rewards: migrateRewardsList(remoteProf.rewards || userProfile.value.rewards),
+            vouchers: Array.isArray(remoteProf.vouchers) ? remoteProf.vouchers : userProfile.value.vouchers
+          }
+          // Falls wir alte überhöhte XP aus v1 korrigiert haben, direkt in Supabase aktualisieren
+          if (calibratedXp !== remoteProf.xp) {
+            await pushProgressAndProfileToCloud()
+          }
+        }
       } else {
         await pushProgressAndProfileToCloud()
       }
@@ -393,7 +441,6 @@ export function useStudyStore() {
       return allQuestions.value.filter((q) => progressMap.value[q.id]?.bookmarked)
     }
     if (deckId === 'workout') {
-      // Intelligentes 10-Fragen-Workout: Zuerst falsche, dann noch nie beantwortete, Rest zufällig
       const wrong = allQuestions.value.filter((q) => progressMap.value[q.id]?.lastCorrect === false)
       const unseen = allQuestions.value.filter((q) => !progressMap.value[q.id]?.attempts)
       const others = allQuestions.value.filter(
@@ -433,10 +480,17 @@ export function useStudyStore() {
       box: nextBox
     }
 
+    // Strenges & faires Punkte-System:
+    // - Neue Frage erstmals richtig: +5 Punkte
+    // - Bekannte Frage wiederholt richtig: +2 Punkte
+    // - Falsch beantwortet: 0 Punkte (zählt auch nicht zum Tagesziel!)
     if (isCorrect) {
-      addStudyActivityAndXp(isFirstTimeCorrect ? 25 : 15, isFirstTimeCorrect ? '+25 Punkte (Neu gemeistert!)' : '+15 Punkte')
-    } else {
-      addStudyActivityAndXp(5, '+5 Punkte fürs Dranbleiben!')
+      const pts = isFirstTimeCorrect ? 5 : 2
+      addStudyActivityAndXp(
+        pts,
+        isFirstTimeCorrect ? `+${pts} Pkt. (Neu gemeistert!)` : `+${pts} Pkt. (Wiederholung)`,
+        true
+      )
     }
 
     scheduleProgressPush()
@@ -456,13 +510,16 @@ export function useStudyStore() {
       box: boxMap[rating]
     }
 
-    const xpMap = { again: 5, hard: 10, good: 15, easy: 20 }
-    addStudyActivityAndXp(xpMap[rating], `+${xpMap[rating]} Punkte (Karteikarte)`)
+    // Nur für gewusste Karteikarten ("Gut" / "Einfach") gibt es +2 Punkte
+    if (isCorrect) {
+      addStudyActivityAndXp(2, '+2 Pkt. (Karteikarte gewusst)', true)
+    }
     scheduleProgressPush()
   }
 
-  function rewardMatchingRound() {
-    addStudyActivityAndXp(30, '+30 Punkte (Zuordnungs-Runde gelöst!)')
+  function rewardMatchingRound(mistakesCount = 0) {
+    const pts = mistakesCount === 0 ? 5 : 2
+    addStudyActivityAndXp(pts, `+${pts} Pkt. (Zuordnungs-Runde gelöst!)`, false)
     scheduleProgressPush()
   }
 
@@ -526,7 +583,7 @@ export function useStudyStore() {
       id: `rew-custom-${Date.now()}`,
       title: payload.title,
       description: payload.description,
-      cost: Math.max(10, Number(payload.cost) || 200),
+      cost: Math.max(50, Number(payload.cost) || 500),
       emoji: payload.emoji || '🎁',
       redeemedCount: 0
     })
@@ -625,6 +682,9 @@ export function useStudyStore() {
 
   async function resetProgress() {
     progressMap.value = {}
+    userProfile.value.xp = 0
+    userProfile.value.spentCoins = 0
+    userProfile.value.todayAnsweredCount = 0
     if (isCloudConfigured.value) {
       await pushProgressAndProfileToCloud().catch(() => {})
     }
@@ -705,9 +765,9 @@ export function useStudyStore() {
       {
         id: 'ach-daily',
         title: 'Tagesziel-Champion',
-        description: `Tagesziel von ${prof.dailyGoal} Fragen an einem Tag erreicht`,
+        description: `Tagesziel von ${prof.dailyGoal} richtigen Fragen an einem Tag erreicht`,
         emoji: '⚡',
-        unlocked: prof.todayAnsweredCount >= prof.dailyGoal || prof.xp >= 300
+        unlocked: prof.todayAnsweredCount >= prof.dailyGoal
       },
       {
         id: 'ach-halfway',

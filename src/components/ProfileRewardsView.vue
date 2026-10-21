@@ -95,7 +95,7 @@ function submitNewReward() {
               />
             </div>
             <p class="text-xs text-slate-400">
-              Jede richtige Antwort bringt dir <strong class="text-amber-300">+15 bis +25 Punkte</strong> für deine Belohnungen!
+              Neue richtige Frage: <strong class="text-amber-300">+5 Punkte</strong> · Richtige Wiederholung: <strong class="text-amber-300">+2 Punkte</strong> · Tagesziel (25 richtige): <strong class="text-emerald-300">+15 Bonus-Punkte</strong>!
             </p>
           </div>
         </div>
