@@ -162,14 +162,14 @@ function repeatWrongOnly() {
   <div class="space-y-6">
     <!-- Top Filter & Mode Bar -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-2 text-slate-400 text-sm font-medium">
+      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div class="flex items-center gap-2 text-slate-400 text-sm font-medium shrink-0">
           <Filter class="w-4 h-4 text-amber-400" />
           <span>Thema:</span>
         </div>
         <select
           v-model="selectedDeckId"
-          class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2 focus:outline-none focus:border-amber-500"
+          class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2 max-w-full sm:max-w-md truncate focus:outline-none focus:border-amber-500"
         >
           <option value="all">Alle Themen ({{ getDeckQuestions('all').length }} Fragen)</option>
           <option value="wrong">⚡ Zuletzt falsch beantwortet ({{ getDeckQuestions('wrong').length }})</option>

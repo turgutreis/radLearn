@@ -191,71 +191,71 @@ function confirmResetProgress() {
         </div>
       </div>
 
-      <!-- Navigation Bar -->
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-2 overflow-x-auto">
-        <nav class="flex items-center gap-1.5 min-w-max">
+      <!-- Navigation Bar (fits on 1 row on iPad/Desktop, wraps cleanly on phones without horizontal scrolling) -->
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+        <nav class="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             @click="activeTab = 'dashboard'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white hover:bg-slate-900'"
+            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <LayoutDashboard class="w-4 h-4" />
-            <span>Übersicht & Themen</span>
+            <LayoutDashboard class="w-4 h-4 shrink-0" />
+            <span>Übersicht</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'quiz'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white hover:bg-slate-900'"
+            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <CheckSquare class="w-4 h-4" />
-            <span>Multiple-Choice & Prüfung</span>
+            <CheckSquare class="w-4 h-4 shrink-0" />
+            <span>MC-Quiz & Prüfung</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'flashcards'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white hover:bg-slate-900'"
+            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <Layers class="w-4 h-4" />
-            <span>Karteikarten (Anki)</span>
+            <Layers class="w-4 h-4 shrink-0" />
+            <span>Karteikarten</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'matching'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white hover:bg-slate-900'"
+            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <Puzzle class="w-4 h-4" />
-            <span>Fristen- & Zahlen-Trainer</span>
+            <Puzzle class="w-4 h-4 shrink-0" />
+            <span>Zahlen- & Fristen</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'cheatsheet'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white shadow' : 'text-slate-400 hover:text-white hover:bg-slate-900'"
+            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <BookOpen class="w-4 h-4" />
-            <span>Spickzettel & Tabellen</span>
+            <BookOpen class="w-4 h-4 shrink-0" />
+            <span>Spickzettel</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'upload'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
+            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap lg:ml-auto"
             :class="
               activeTab === 'upload'
                 ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-bold shadow'
-                : 'text-amber-300 hover:bg-amber-500/15 border border-amber-500/30'
+                : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/40'
             "
           >
-            <UploadCloud class="w-4 h-4" />
-            <span>PDF-Upload & KI-Generator</span>
+            <UploadCloud class="w-4 h-4 shrink-0" />
+            <span>PDF-Upload & KI</span>
           </button>
         </nav>
       </div>
@@ -402,6 +402,14 @@ function confirmResetProgress() {
               >
                 <Play class="w-4 h-4" />
                 Alle Fragen trainieren ({{ overallStats.total }})
+              </button>
+              <button
+                type="button"
+                @click="activeTab = 'upload'"
+                class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-semibold text-sm flex items-center gap-2 transition"
+              >
+                <UploadCloud class="w-4 h-4 text-amber-400" />
+                Neues PDF hochladen
               </button>
               <button
                 v-if="overallStats.needsReview > 0"

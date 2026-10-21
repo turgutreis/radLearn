@@ -104,14 +104,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
   <div class="space-y-6">
     <!-- Top Controls -->
     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-2 text-slate-400 text-sm font-medium">
+      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <div class="flex items-center gap-2 text-slate-400 text-sm font-medium shrink-0">
           <Filter class="w-4 h-4 text-cyan-400" />
           <span>Kartendeck:</span>
         </div>
         <select
           v-model="selectedDeckId"
-          class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2 focus:outline-none focus:border-cyan-500"
+          class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2 max-w-full sm:max-w-md truncate focus:outline-none focus:border-cyan-500"
         >
           <option value="all">Alle Karteikarten ({{ getDeckQuestions('all').length }})</option>
           <option value="bookmarked">⭐ Gemerkte Karten ({{ getDeckQuestions('bookmarked').length }})</option>
