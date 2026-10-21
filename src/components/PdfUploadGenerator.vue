@@ -92,6 +92,10 @@ function updateSelectedPagesText() {
   extractedText.value = slice.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join('\n\n')
 }
 
+const isLocalDev =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
 async function processPdfFile(file: File) {
   errorMessage.value = null
   successMessage.value = null
@@ -100,24 +104,26 @@ async function processPdfFile(file: File) {
   extractedPages.value = []
 
   try {
-    const formData = new FormData()
-    formData.append('file', file)
+    if (isLocalDev) {
+      const formData = new FormData()
+      formData.append('file', file)
 
-    const res = await fetch('/api/extract-pdf', {
-      method: 'POST',
-      body: formData
-    }).catch(() => null)
+      const res = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        body: formData
+      }).catch(() => null)
 
-    if (res && res.ok) {
-      const data = await res.json()
-      extractedText.value = data.fullText || ''
-      extractedPages.value = Array.isArray(data.pages) ? data.pages : []
-      extractedPdfBase64.value = data.pdfBase64
-      totalPages.value = data.totalPages || 1
-      pageFrom.value = 1
-      pageTo.value = totalPages.value
-      useDeepChunking.value = totalPages.value > 12
-      return
+      if (res && res.ok) {
+        const data = await res.json()
+        extractedText.value = data.fullText || ''
+        extractedPages.value = Array.isArray(data.pages) ? data.pages : []
+        extractedPdfBase64.value = data.pdfBase64
+        totalPages.value = data.totalPages || 1
+        pageFrom.value = 1
+        pageTo.value = totalPages.value
+        useDeepChunking.value = totalPages.value > 12
+        return
+      }
     }
 
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
@@ -169,24 +175,26 @@ function updateProviderModel(provider: 'gemini' | 'openai' | 'anthropic' | 'olla
 }
 
 async function runSingleAiCall(chunkText: string, chunkLabel: string, count: number, includePdfBinary: boolean) {
-  const res = await fetch('/api/generate-questions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: chunkText,
-      pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
-      fileName: chunkLabel,
-      provider: aiSettings.value.provider,
-      apiKey: getActiveApiKey(),
-      model: aiSettings.value.model,
-      ollamaUrl: aiSettings.value.ollamaUrl,
-      questionCount: count,
-      focusAreas: focusAreas.value
-    })
-  }).catch(() => null)
+  if (isLocalDev) {
+    const res = await fetch('/api/generate-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: chunkText,
+        pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
+        fileName: chunkLabel,
+        provider: aiSettings.value.provider,
+        apiKey: getActiveApiKey(),
+        model: aiSettings.value.model,
+        ollamaUrl: aiSettings.value.ollamaUrl,
+        questionCount: count,
+        focusAreas: focusAreas.value
+      })
+    }).catch(() => null)
 
-  if (res && res.ok) {
-    return await res.json()
+    if (res && res.ok) {
+      return await res.json()
+    }
   }
 
   return await generateQuestionsInBrowser({
@@ -197,7 +205,10 @@ async function runSingleAiCall(chunkText: string, chunkLabel: string, count: num
     apiKey: getActiveApiKey(),
     model: aiSettings.value.model,
     questionCount: count,
-    focusAreas: focusAreas.value
+    focusAreas: focusAreas.value,
+    onStatusUpdate: (msg) => {
+      batchProgressText.value = msg
+    }
   })
 }
 
@@ -238,26 +249,33 @@ async function generateQuestionsFromContent() {
         batchProgressPercent.value = Math.round(((idx + 0.2) / chunks.length) * 100)
 
         const chunkText = chunk.map((p) => `--- Seite ${p.pageNumber} ---\n${p.text}`).join('\n\n')
-        const chunkResult = await runSingleAiCall(
-          chunkText,
-          `${extractedFileName.value} (S. ${startP}-${endP})`,
-          questionCount.value,
-          false // Bei Seiten-Blöcken nutzen wir den exakten Seitentext des jeweiligen Abschnitts
-        )
+        try {
+          const chunkResult = await runSingleAiCall(
+            chunkText,
+            `${extractedFileName.value} (S. ${startP}-${endP})`,
+            questionCount.value,
+            false
+          )
 
-        if (idx === 0 && chunkResult?.deckTitle) {
-          mainTitle = chunkResult.deckTitle
-          mainDescription = chunkResult.deckDescription || ''
-        }
-        if (Array.isArray(chunkResult?.summaryPoints)) {
-          allCombinedSummary.push(...chunkResult.summaryPoints)
-        }
-        if (Array.isArray(chunkResult?.questions)) {
-          const taggedQuestions = chunkResult.questions.map((q: any) => ({
-            ...q,
-            lawReference: q.lawReference ? `${q.lawReference} (S. ${startP}–${endP})` : `Skript S. ${startP}–${endP}`
-          }))
-          allCombinedQuestions.push(...taggedQuestions)
+          if (idx === 0 && chunkResult?.deckTitle) {
+            mainTitle = chunkResult.deckTitle
+            mainDescription = chunkResult.deckDescription || ''
+          }
+          if (Array.isArray(chunkResult?.summaryPoints)) {
+            allCombinedSummary.push(...chunkResult.summaryPoints)
+          }
+          if (Array.isArray(chunkResult?.questions)) {
+            const taggedQuestions = chunkResult.questions.map((q: any) => ({
+              ...q,
+              lawReference: q.lawReference ? `${q.lawReference} (S. ${startP}–${endP})` : `Skript S. ${startP}–${endP}`
+            }))
+            allCombinedQuestions.push(...taggedQuestions)
+          }
+        } catch (chunkErr: any) {
+          console.warn(`Abschnitt S. ${startP}-${endP} übersprungen nach Fehler:`, chunkErr)
+          if (allCombinedQuestions.length === 0 && idx === chunks.length - 1) {
+            throw chunkErr
+          }
         }
 
         batchProgressPercent.value = Math.round(((idx + 1) / chunks.length) * 100)

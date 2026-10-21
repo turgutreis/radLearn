@@ -76,24 +76,35 @@ export async function extractPdfInBrowser(file: File): Promise<{
   }
 }
 
-async function resolveAvailableGeminiModel(apiKey: string): Promise<string | null> {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function listAvailableGeminiModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
-    if (!res.ok) return null
+    if (!res.ok) return []
     const data = await res.json()
     const models: Array<{ name: string; supportedGenerationMethods?: string[] }> = data?.models || []
     const candidates = models
       .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
       .map((m) => m.name.replace(/^models\//, ''))
-      .filter((name) => name.startsWith('gemini-') && !name.includes('embedding') && !name.includes('vision') && !name.includes('imagen'))
+      .filter(
+        (name) =>
+          name.startsWith('gemini-') &&
+          !name.includes('embedding') &&
+          !name.includes('vision') &&
+          !name.includes('imagen') &&
+          !name.includes('tts') &&
+          !name.includes('audio')
+      )
 
-    // Bevorzuge neueste Flash-Modelle
-    const flashModels = candidates.filter((n) => n.includes('flash')).sort().reverse()
-    if (flashModels.length > 0) return flashModels[0]
-    if (candidates.length > 0) return candidates.sort().reverse()[0]
-    return null
+    // Sortiere so, dass Flash- und Lite-Modelle zuerst kommen (schnell & hohe Verfügbarkeit)
+    const flash = candidates.filter((n) => n.includes('flash')).sort().reverse()
+    const rest = candidates.filter((n) => !n.includes('flash')).sort().reverse()
+    return [...flash, ...rest]
   } catch {
-    return null
+    return []
   }
 }
 
@@ -124,6 +135,7 @@ export async function generateQuestionsInBrowser(params: {
   model: string
   questionCount: number
   focusAreas?: string
+  onStatusUpdate?: (msg: string) => void
 }) {
   const count = Math.min(Math.max(Number(params.questionCount) || 12, 3), 25)
 
@@ -151,21 +163,39 @@ export async function generateQuestionsInBrowser(params: {
     const primaryModel = params.model || 'gemini-3.8-flash'
     let response = await callGeminiModel(primaryModel, params.apiKey, parts)
 
-    // Automatischer Fallback, falls das eingestellte Modell (z.B. gemini-2.5-flash) 404 NOT_FOUND liefert!
+    // 1. Falls 404 (Modellname veraltet): Empfohlenes Modell aus Fehlermeldung oder /models Liste holen
     if (response.status === 404) {
       const errText = await response.text()
-      // 1. Prüfen, ob die Google-Fehlermeldung direkt das neue Modell nennt ("use models/xyz")
       const suggestedMatch = errText.match(/use models\/([a-zA-Z0-9._-]+)/i)
       if (suggestedMatch?.[1]) {
         response = await callGeminiModel(suggestedMatch[1], params.apiKey, parts)
       }
-
-      // 2. Falls immer noch 404, frage die API nach den für diesen Key freigeschalteten Modellen
       if (response.status === 404) {
-        const discoveredModel = await resolveAvailableGeminiModel(params.apiKey)
-        if (discoveredModel) {
-          response = await callGeminiModel(discoveredModel, params.apiKey, parts)
+        const available = await listAvailableGeminiModels(params.apiKey)
+        if (available.length > 0) {
+          response = await callGeminiModel(available[0], params.apiKey, parts)
         }
+      }
+    }
+
+    // 2. Falls 503 (High Demand / Überlastung bei Google) oder 429 (Rate Limit):
+    // Automatischer Retry mit Backoff + Ausweichen auf alternative Gemini-Modelle (z.B. flash-lite / pro)!
+    if (response.status === 503 || response.status === 429) {
+      const available = await listAvailableGeminiModels(params.apiKey)
+      const fallbackModels = [
+        primaryModel,
+        ...available.filter((m) => m !== primaryModel)
+      ].slice(0, 4)
+
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        const waitMs = attempt * 2200
+        const nextModel = fallbackModels[attempt % fallbackModels.length] || primaryModel
+        params.onStatusUpdate?.(
+          `Google Server ausgelastet (503) – automatischer Versuch ${attempt}/4 mit ${nextModel} in ${(waitMs / 1000).toFixed(1)}s...`
+        )
+        await sleep(waitMs)
+        response = await callGeminiModel(nextModel, params.apiKey, parts)
+        if (response.ok) break
       }
     }
 
