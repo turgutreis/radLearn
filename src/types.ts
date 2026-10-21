@@ -36,10 +36,42 @@ export interface QuestionProgress {
   wrongCount: number
   lastAnsweredAt?: string
   lastCorrect?: boolean
-  // Spaced Repetition (SM-2 light)
   box: number // 0 = neu, 1 = nochmal, 2 = schwer, 3 = gut, 4 = gemeistert
   nextReviewAt?: string
   bookmarked?: boolean
+  personalNote?: string
+}
+
+export interface RewardItem {
+  id: string
+  title: string
+  description: string
+  cost: number
+  emoji: string
+  redeemedCount: number
+  lastRedeemedAt?: string
+}
+
+export interface RedeemedVoucher {
+  id: string
+  rewardId: string
+  title: string
+  emoji: string
+  cost: number
+  redeemedAt: string
+  fulfilled: boolean
+}
+
+export interface UserProfile {
+  name: string
+  xp: number
+  spentCoins: number
+  streakDays: number
+  lastStudyDate: string // YYYY-MM-DD
+  dailyGoal: number
+  todayAnsweredCount: number
+  rewards: RewardItem[]
+  vouchers: RedeemedVoucher[]
 }
 
 export interface MatchingPair {

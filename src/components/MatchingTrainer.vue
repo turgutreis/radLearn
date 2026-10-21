@@ -3,6 +3,9 @@ import { ref, computed, watch } from 'vue'
 import { MATCHING_PAIRS } from '../data/initialData'
 import type { MatchingPair } from '../types'
 import { CheckCircle2, RotateCcw, Sparkles, ArrowUpDown, Trophy } from 'lucide-vue-next'
+import { useStudyStore } from '../composables/useStudyStore'
+
+const { rewardMatchingRound } = useStudyStore()
 
 type CategoryKey = 'fristen' | 'grenzwerte' | 'gewebe' | 'bereiche'
 
@@ -51,6 +54,9 @@ function selectRight(pair: MatchingPair) {
     next.add(pair.id)
     matchedIds.value = next
     selectedLeftId.value = null
+    if (next.size === currentPairs.value.length) {
+      rewardMatchingRound()
+    }
   } else {
     mistakes.value++
     wrongFlash.value = true

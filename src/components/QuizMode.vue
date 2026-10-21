@@ -22,7 +22,7 @@ const props = defineProps<{
   initialDeckId?: string
 }>()
 
-const { allDecks, getDeckQuestions, getProgress, recordAnswer, toggleBookmark } = useStudyStore()
+const { allDecks, getDeckQuestions, getProgress, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
 
 const selectedDeckId = ref<string>(props.initialDeckId || 'all')
 const examMode = ref<boolean>(false) // false = Sofort-Feedback (Lernmodus), true = Prüfungsmodus
@@ -172,7 +172,8 @@ function repeatWrongOnly() {
           class="bg-slate-800 border border-slate-700 text-slate-100 text-sm rounded-xl px-3.5 py-2 max-w-full sm:max-w-md truncate focus:outline-none focus:border-amber-500"
         >
           <option value="all">Alle Themen ({{ getDeckQuestions('all').length }} Fragen)</option>
-          <option value="wrong">⚡ Zuletzt falsch beantwortet ({{ getDeckQuestions('wrong').length }})</option>
+          <option value="workout">⚡ 10-Fragen Tages-Workout (Intelligent gemischt)</option>
+          <option value="wrong">🔁 Zuletzt falsch beantwortet ({{ getDeckQuestions('wrong').length }})</option>
           <option value="bookmarked">⭐ Gemerkte Fragen ({{ getDeckQuestions('bookmarked').length }})</option>
           <option v-for="deck in allDecks" :key="deck.id" :value="deck.id">
             {{ deck.title }} ({{ getDeckQuestions(deck.id).length }})
@@ -478,6 +479,17 @@ function repeatWrongOnly() {
               <strong class="font-bold text-amber-300">Eselsbrücke / Merksatz: </strong>
               {{ currentQuestion.mnemonic }}
             </div>
+          </div>
+
+          <!-- Personal Note Field -->
+          <div class="pt-2">
+            <input
+              :value="currentProgress?.personalNote || ''"
+              @change="(e) => savePersonalNote(currentQuestion!.id, (e.target as HTMLInputElement).value)"
+              type="text"
+              placeholder="✏️ Eigene Notiz oder eigene Eselsbrücke zu dieser Frage speichern..."
+              class="w-full bg-slate-950/70 border border-slate-800 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+            />
           </div>
         </div>
 

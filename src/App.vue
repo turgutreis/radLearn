@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import {
   Radiation,
   LayoutDashboard,
@@ -15,12 +15,15 @@ import {
   Sparkles,
   AlertTriangle,
   Bookmark,
-  Award,
   Cloud,
   Check,
   Copy,
   X,
-  RefreshCw
+  RefreshCw,
+  Gift,
+  Flame,
+  Heart,
+  Zap
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
 import { SUPABASE_SQL_SCHEMA } from './services/supabaseSync'
@@ -29,8 +32,9 @@ import FlashcardMode from './components/FlashcardMode.vue'
 import MatchingTrainer from './components/MatchingTrainer.vue'
 import CheatSheetView from './components/CheatSheetView.vue'
 import PdfUploadGenerator from './components/PdfUploadGenerator.vue'
+import ProfileRewardsView from './components/ProfileRewardsView.vue'
 
-type TabId = 'dashboard' | 'quiz' | 'flashcards' | 'matching' | 'cheatsheet' | 'upload'
+type TabId = 'dashboard' | 'quiz' | 'flashcards' | 'matching' | 'cheatsheet' | 'rewards' | 'upload'
 
 const activeTab = ref<TabId>('dashboard')
 const activeDeckId = ref<string>('all')
@@ -40,6 +44,10 @@ const sqlCopied = ref<boolean>(false)
 const {
   allDecks,
   overallStats,
+  userProfile,
+  availableCoins,
+  levelInfo,
+  lastXpGain,
   supabaseConfig,
   isCloudConfigured,
   cloudSyncStatus,
@@ -50,6 +58,11 @@ const {
   importBackupJson,
   resetProgress
 } = useStudyStore()
+
+const nextRewardTarget = computed(() => {
+  const sorted = [...userProfile.value.rewards].sort((a, b) => a.cost - b.cost)
+  return sorted.find((r) => r.cost > availableCoins.value) || sorted[sorted.length - 1]
+})
 
 function startQuizForDeck(deckId: string) {
   activeDeckId.value = deckId
@@ -109,9 +122,18 @@ function confirmResetProgress() {
 
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <!-- Floating XP Gain Toast -->
+    <div
+      v-if="lastXpGain"
+      class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-extrabold text-xs sm:text-sm shadow-2xl flex items-center gap-2 animate-bounce"
+    >
+      <Sparkles class="w-4 h-4" />
+      <span>{{ lastXpGain.label }}</span>
+    </div>
+
     <!-- Top Header -->
     <header class="sticky top-0 z-30 backdrop-blur-xl bg-slate-950/85 border-b border-slate-800/80">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
         <!-- Brand -->
         <div class="flex items-center gap-3 cursor-pointer" @click="activeTab = 'dashboard'">
           <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20">
@@ -125,19 +147,33 @@ function confirmResetProgress() {
               </span>
             </div>
             <p class="text-xs text-slate-400 hidden sm:block">
-              Interaktiver Prüfungs- & Karteikarten-Trainer (StrlSchG, StrlSchV, Dosimetrie, UKHD-Skripte)
+              Hallo {{ userProfile.name }}! {{ levelInfo.current.badge }} {{ levelInfo.current.title }} (Level {{ levelInfo.current.level }})
             </p>
           </div>
         </div>
 
-        <!-- Cloud Sync, Backup & Quick Stats -->
-        <div class="flex items-center gap-2">
-          <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-            <Award class="w-4 h-4 text-amber-400" />
-            <span class="text-slate-400">Gemeistert:</span>
-            <strong class="text-white">{{ overallStats.mastered }} / {{ overallStats.total }}</strong>
-            <span class="text-amber-400 font-bold">({{ overallStats.masteryPercent }}%)</span>
-          </div>
+        <!-- Account Pill, Cloud Sync & Backup -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Profile / Coins / Streak Quick Pill -->
+          <button
+            type="button"
+            @click="activeTab = 'rewards'"
+            class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-rose-500/30 text-xs font-bold flex items-center gap-2.5 transition"
+            title="Zu deinem Profil & Belohnungs-Shop (Sushi & Co.)"
+          >
+            <span class="flex items-center gap-1 text-amber-400">
+              <Flame class="w-3.5 h-3.5 fill-amber-400" />
+              {{ userProfile.streakDays }}d
+            </span>
+            <span class="text-slate-700">|</span>
+            <span class="flex items-center gap-1 text-rose-300">
+              <Heart class="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+              {{ availableCoins }} Pkt.
+            </span>
+            <span class="hidden sm:inline text-[11px] px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300">
+              Lvl {{ levelInfo.current.level }}
+            </span>
+          </button>
 
           <!-- Cloud Sync Status Button -->
           <button
@@ -157,12 +193,12 @@ function confirmResetProgress() {
           >
             <RefreshCw v-if="cloudSyncStatus === 'syncing'" class="w-3.5 h-3.5 animate-spin text-cyan-400" />
             <Cloud v-else class="w-3.5 h-3.5" :class="cloudSyncStatus === 'synced' ? 'text-emerald-400' : 'text-amber-400'" />
-            <span>
+            <span class="hidden sm:inline">
               {{
                 cloudSyncStatus === 'synced'
                   ? 'Cloud-Sync aktiv'
                   : cloudSyncStatus === 'syncing'
-                    ? 'Synchronisiere...'
+                    ? 'Sync...'
                     : cloudSyncStatus === 'error'
                       ? 'Sync-Fehler'
                       : 'Cloud-Sync'
@@ -173,88 +209,100 @@ function confirmResetProgress() {
           <button
             type="button"
             @click="handleExportBackup"
-            class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition"
+            class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1 transition"
             title="Lernfortschritt & eigene PDF-Decks als JSON sichern"
           >
             <Download class="w-3.5 h-3.5 text-amber-400" />
-            <span class="hidden sm:inline">Backup</span>
           </button>
 
           <label
-            class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition"
+            class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1 cursor-pointer transition"
             title="JSON-Backup wiederherstellen"
           >
             <Upload class="w-3.5 h-3.5 text-cyan-400" />
-            <span class="hidden sm:inline">Import</span>
             <input type="file" accept="application/json" class="hidden" @change="handleImportBackup" />
           </label>
         </div>
       </div>
 
-      <!-- Navigation Bar (fits on 1 row on iPad/Desktop, wraps cleanly on phones without horizontal scrolling) -->
+      <!-- Navigation Bar (Responsive Grid on small/medium screens, Flex on large screens - Zero horizontal scroll clipping) -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
-        <nav class="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap items-center gap-1.5 sm:gap-2">
+        <nav class="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-wrap items-center gap-1.5">
           <button
             type="button"
             @click="activeTab = 'dashboard'"
-            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
             :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <LayoutDashboard class="w-4 h-4 shrink-0" />
+            <LayoutDashboard class="w-3.5 h-3.5 shrink-0" />
             <span>Übersicht</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'quiz'"
-            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
             :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <CheckSquare class="w-4 h-4 shrink-0" />
-            <span>MC-Quiz & Prüfung</span>
+            <CheckSquare class="w-3.5 h-3.5 shrink-0" />
+            <span>MC-Quiz</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'flashcards'"
-            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
             :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <Layers class="w-4 h-4 shrink-0" />
+            <Layers class="w-3.5 h-3.5 shrink-0" />
             <span>Karteikarten</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'matching'"
-            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
             :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <Puzzle class="w-4 h-4 shrink-0" />
-            <span>Zahlen- & Fristen</span>
+            <Puzzle class="w-3.5 h-3.5 shrink-0" />
+            <span>Zahlen & Fristen</span>
           </button>
 
           <button
             type="button"
             @click="activeTab = 'cheatsheet'"
-            class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
             :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
           >
-            <BookOpen class="w-4 h-4 shrink-0" />
+            <BookOpen class="w-3.5 h-3.5 shrink-0" />
             <span>Spickzettel</span>
           </button>
 
           <button
             type="button"
+            @click="activeTab = 'rewards'"
+            class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap"
+            :class="
+              activeTab === 'rewards'
+                ? 'bg-rose-500 text-white font-bold shadow'
+                : 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/30'
+            "
+          >
+            <Gift class="w-3.5 h-3.5 shrink-0" />
+            <span>Belohnungen 🍣</span>
+          </button>
+
+          <button
+            type="button"
             @click="activeTab = 'upload'"
-            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center lg:justify-start gap-2 transition whitespace-nowrap lg:ml-auto"
+            class="col-span-2 sm:col-span-2 lg:col-span-1 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center lg:justify-start gap-1.5 transition whitespace-nowrap lg:ml-auto"
             :class="
               activeTab === 'upload'
                 ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-bold shadow'
                 : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/40'
             "
           >
-            <UploadCloud class="w-4 h-4 shrink-0" />
+            <UploadCloud class="w-3.5 h-3.5 shrink-0" />
             <span>PDF-Upload & KI</span>
           </button>
         </nav>
@@ -276,7 +324,7 @@ function confirmResetProgress() {
               Supabase Cloud-Sync
             </h3>
             <p class="text-xs text-slate-400 mt-1">
-              Sobald verbunden, werden alle neu hochgeladenen PDF-Decks sowie der gesamte Lernfortschritt automatisch zwischen allen Geräten synchronisiert.
+              Sobald verbunden, werden alle neu hochgeladenen PDF-Decks, der Lernfortschritt und ihre eingelösten Belohnungen automatisch zwischen allen Geräten synchronisiert.
             </p>
           </div>
           <button
@@ -291,7 +339,7 @@ function confirmResetProgress() {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-1.5 sm:col-span-2">
             <label class="text-xs font-semibold text-slate-300">
-              Supabase Project URL (oder in Vercel als <code class="text-amber-300">VITE_SUPABASE_URL</code> setzen)
+              Supabase Project URL (oder in Netlify/Vercel als <code class="text-amber-300">VITE_SUPABASE_URL</code> setzen)
             </label>
             <input
               v-model="supabaseConfig.url"
@@ -303,7 +351,7 @@ function confirmResetProgress() {
 
           <div class="space-y-1.5 sm:col-span-2">
             <label class="text-xs font-semibold text-slate-300">
-              Supabase Anon Public Key (oder in Vercel als <code class="text-amber-300">VITE_SUPABASE_ANON_KEY</code> setzen)
+              Supabase Anon Public Key (oder in Netlify/Vercel als <code class="text-amber-300">VITE_SUPABASE_ANON_KEY</code> setzen)
             </label>
             <input
               v-model="supabaseConfig.anonKey"
@@ -353,7 +401,7 @@ function confirmResetProgress() {
           class="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-2"
         >
           <Check class="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Erfolgreich mit Supabase verbunden! Alle Decks & Fortschritte sind synchron.</span>
+          <span>Erfolgreich mit Supabase verbunden! Alle Decks, Erfolge & Fortschritte sind synchron.</span>
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-2">
@@ -383,34 +431,55 @@ function confirmResetProgress() {
       <div v-if="activeTab === 'dashboard'" class="space-y-8">
         <!-- Hero Stats Banner -->
         <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div class="space-y-2 max-w-2xl">
-            <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
-              <Sparkles class="w-4 h-4" />
-              Bereit für die Strahlenschutz- & Radiologie-Prüfung
-            </span>
+          <div class="space-y-3 max-w-2xl">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
+                <Sparkles class="w-4 h-4" />
+                {{ levelInfo.current.badge }} Level {{ levelInfo.current.level }}: {{ levelInfo.current.title }}
+              </span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold">
+                Heute: {{ userProfile.todayAnsweredCount }} / {{ userProfile.dailyGoal }} Tagesziel
+              </span>
+            </div>
+
             <h2 class="text-2xl sm:text-3xl font-extrabold text-white">
-              Willkommen beim MTR Lern-Trainer!
+              Viel Erfolg beim Lernen, {{ userProfile.name }}!
             </h2>
             <p class="text-sm text-slate-300 leading-relaxed">
-              Beide hochgeladenen Strahlenschutz-PDFs (42 Seiten inkl. StrlSchG/StrlSchV, Dosisgrößen, Grenzwerte, SSV/SSB/MPE, Teleradiologie, Freigabe & alle Fristen) sind bereits komplett als Prüfungsfragen, Karteikarten und Tabellen hinterlegt. Du kannst jederzeit weitere Skripte hochladen!
+              Sammle mit jeder beantworteten Frage Punkte für deine nächste Belohnung
+              <span v-if="nextRewardTarget" class="text-amber-300 font-semibold">
+                ({{ nextRewardTarget.emoji }} {{ nextRewardTarget.title }}: {{ availableCoins }} / {{ nextRewardTarget.cost }} Pkt.)
+              </span>!
             </p>
-            <div class="flex flex-wrap items-center gap-3 pt-2">
+
+            <div class="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                @click="startQuizForDeck('workout')"
+                class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-extrabold text-sm flex items-center gap-2 transition shadow-lg shadow-amber-500/20"
+              >
+                <Zap class="w-4 h-4" />
+                10-Fragen Tages-Workout
+              </button>
+
               <button
                 type="button"
                 @click="startQuizForDeck('all')"
-                class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 transition shadow-lg shadow-amber-500/20"
+                class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold text-sm flex items-center gap-2 transition"
               >
-                <Play class="w-4 h-4" />
-                Alle Fragen trainieren ({{ overallStats.total }})
+                <Play class="w-4 h-4 text-amber-400" />
+                Alle Fragen ({{ overallStats.total }})
               </button>
+
               <button
                 type="button"
-                @click="activeTab = 'upload'"
-                class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-semibold text-sm flex items-center gap-2 transition"
+                @click="activeTab = 'rewards'"
+                class="px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/30 font-semibold text-sm flex items-center gap-2 transition"
               >
-                <UploadCloud class="w-4 h-4 text-amber-400" />
-                Neues PDF hochladen
+                <Gift class="w-4 h-4 text-rose-400" />
+                Belohnungs-Shop 🍣
               </button>
+
               <button
                 v-if="overallStats.needsReview > 0"
                 type="button"
@@ -418,8 +487,9 @@ function confirmResetProgress() {
                 class="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-semibold text-sm flex items-center gap-2 transition"
               >
                 <AlertTriangle class="w-4 h-4 text-rose-400" />
-                {{ overallStats.needsReview }} falsche Fragen wiederholen
+                {{ overallStats.needsReview }} falsche wiederholen
               </button>
+
               <button
                 v-if="overallStats.bookmarked > 0"
                 type="button"
@@ -427,7 +497,7 @@ function confirmResetProgress() {
                 class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold text-sm flex items-center gap-2 transition"
               >
                 <Bookmark class="w-4 h-4" />
-                {{ overallStats.bookmarked }} gemerkte Fragen
+                {{ overallStats.bookmarked }} gemerkte
               </button>
             </div>
           </div>
@@ -442,13 +512,13 @@ function confirmResetProgress() {
               <div class="text-2xl font-extrabold text-emerald-400">{{ overallStats.masteryPercent }}%</div>
               <div class="text-xs text-slate-400">Sicher gemeistert</div>
             </div>
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4">
-              <div class="text-2xl font-extrabold text-cyan-400">{{ overallStats.answered }}</div>
-              <div class="text-xs text-slate-400">Bereits bearbeitet</div>
+            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 cursor-pointer hover:border-rose-500/40 transition" @click="activeTab = 'rewards'">
+              <div class="text-2xl font-extrabold text-rose-400">{{ availableCoins }} 💖</div>
+              <div class="text-xs text-slate-400">Belohnungs-Punkte</div>
             </div>
             <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4">
-              <div class="text-2xl font-extrabold text-rose-400">{{ overallStats.needsReview }}</div>
-              <div class="text-xs text-slate-400">Wiederholen</div>
+              <div class="text-2xl font-extrabold text-amber-400">{{ userProfile.streakDays }} 🔥</div>
+              <div class="text-xs text-slate-400">Tage Streak</div>
             </div>
           </div>
         </div>
@@ -534,7 +604,10 @@ function confirmResetProgress() {
       <!-- TAB 5: CHEAT SHEET & TABLES -->
       <CheatSheetView v-else-if="activeTab === 'cheatsheet'" />
 
-      <!-- TAB 6: PDF UPLOAD & AI GENERATOR -->
+      <!-- TAB 6: PROFILE, ACHIEVEMENTS & REWARDS SHOP -->
+      <ProfileRewardsView v-else-if="activeTab === 'rewards'" />
+
+      <!-- TAB 7: PDF UPLOAD & AI GENERATOR -->
       <PdfUploadGenerator
         v-else-if="activeTab === 'upload'"
         @open-deck="(deckId) => startQuizForDeck(deckId)"
