@@ -84,8 +84,19 @@ export function useStudyStore() {
     Boolean(supabaseConfig.value.url.trim() && supabaseConfig.value.anonKey.trim())
   )
 
-  const allDecks = computed<StudyDeck[]>(() => [...INITIAL_DECKS, ...customDecks.value])
-  const allQuestions = computed<Question[]>(() => [...INITIAL_QUESTIONS, ...customQuestions.value])
+  const allDecks = computed<StudyDeck[]>(() => {
+    const map = new Map<string, StudyDeck>()
+    for (const d of INITIAL_DECKS) map.set(d.id, d)
+    for (const d of customDecks.value) map.set(d.id, d)
+    return Array.from(map.values())
+  })
+
+  const allQuestions = computed<Question[]>(() => {
+    const map = new Map<string, Question>()
+    for (const q of INITIAL_QUESTIONS) map.set(q.id, q)
+    for (const q of customQuestions.value) map.set(q.id, q)
+    return Array.from(map.values())
+  })
 
   async function syncFromCloud() {
     if (!isCloudConfigured.value) {
@@ -101,7 +112,18 @@ export function useStudyStore() {
       const cloudData = await fetchCloudDecks(supabaseConfig.value)
       const cloudDeckIds = new Set(cloudData.decks.map((d) => d.id))
 
-      // Lokale Decks, die noch nicht in der Cloud sind, hochladen
+      // 1a. Die 6 Basis-Decks aus den ersten beiden PDFs automatisch in Supabase hinterlegen, falls noch nicht vorhanden
+      for (const initDeck of INITIAL_DECKS) {
+        if (!cloudDeckIds.has(initDeck.id)) {
+          const qs = INITIAL_QUESTIONS.filter((q) => q.deckId === initDeck.id)
+          await upsertCloudDeck(supabaseConfig.value, initDeck, qs)
+          cloudDeckIds.add(initDeck.id)
+          cloudData.decks.push(initDeck)
+          cloudData.questions.push(...qs)
+        }
+      }
+
+      // 1b. Lokale Custom-Decks, die noch nicht in der Cloud sind, hochladen
       for (const localDeck of customDecks.value) {
         if (!cloudDeckIds.has(localDeck.id)) {
           const qs = customQuestions.value.filter((q) => q.deckId === localDeck.id)
@@ -111,10 +133,11 @@ export function useStudyStore() {
         }
       }
 
-      customDecks.value = cloudData.decks
-      customQuestions.value = cloudData.questions
+      const builtInIds = new Set(INITIAL_DECKS.map((d) => d.id))
+      customDecks.value = cloudData.decks.filter((d) => !builtInIds.has(d.id))
+      customQuestions.value = cloudData.questions.filter((q) => !builtInIds.has(q.deckId))
 
-      // 2. Lade & merge Lernfortschritt
+      // 2. Lade & merge Lernfortschritt (oder lege initialen Eintrag in radlearn_progress an)
       const cloudProg = await fetchCloudProgress(supabaseConfig.value)
       if (cloudProg) {
         const merged: Record<string, QuestionProgress> = { ...cloudProg }
@@ -125,7 +148,7 @@ export function useStudyStore() {
           }
         }
         progressMap.value = merged
-      } else if (Object.keys(progressMap.value).length > 0) {
+      } else {
         await saveCloudProgress(supabaseConfig.value, progressMap.value)
       }
 
