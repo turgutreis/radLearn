@@ -172,7 +172,7 @@ async function generateQuestionsFromContent() {
       throw new Error('Die KI hat keine gültigen Fragen zurückgegeben. Bitte versuche es erneut.')
     }
 
-    const createdDeck = addGeneratedDeck({
+    const createdDeck = await addGeneratedDeck({
       deckTitle: data.deckTitle || extractedFileName.value.replace(/\.pdf$/i, '') || 'Neues PDF-Lernset',
       deckDescription: data.deckDescription || `Generiert aus ${extractedFileName.value || 'Text-Eingabe'}`,
       sourceFileName: extractedFileName.value || 'Manuelle Eingabe',
