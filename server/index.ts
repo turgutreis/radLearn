@@ -75,7 +75,7 @@ async function generateWithGemini(req: GenerateRequest, count: number) {
   if (!apiKey) {
     throw new Error('Kein Gemini API-Key angegeben. Bitte in den Einstellungen eintragen oder als GEMINI_API_KEY in .env setzen.')
   }
-  const model = req.model || 'gemini-2.5-flash'
+  const model = req.model === 'gemini-2.5-flash' || !req.model ? 'gemini-3.8-flash' : req.model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
 
   const parts: any[] = []

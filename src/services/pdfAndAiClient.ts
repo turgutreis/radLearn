@@ -76,6 +76,45 @@ export async function extractPdfInBrowser(file: File): Promise<{
   }
 }
 
+async function resolveAvailableGeminiModel(apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
+    if (!res.ok) return null
+    const data = await res.json()
+    const models: Array<{ name: string; supportedGenerationMethods?: string[] }> = data?.models || []
+    const candidates = models
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''))
+      .filter((name) => name.startsWith('gemini-') && !name.includes('embedding') && !name.includes('vision') && !name.includes('imagen'))
+
+    // Bevorzuge neueste Flash-Modelle
+    const flashModels = candidates.filter((n) => n.includes('flash')).sort().reverse()
+    if (flashModels.length > 0) return flashModels[0]
+    if (candidates.length > 0) return candidates.sort().reverse()[0]
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function callGeminiModel(modelName: string, apiKey: string, parts: any[]) {
+  const cleanModel = modelName.replace(/^models\//, '')
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json'
+      }
+    })
+  })
+}
+
 export async function generateQuestionsInBrowser(params: {
   text?: string
   pdfBase64?: string
@@ -92,11 +131,8 @@ export async function generateQuestionsInBrowser(params: {
     if (!params.apiKey) {
       throw new Error('Bitte trage deinen Google Gemini API-Key oben unter „KI-Modell & API-Key“ ein.')
     }
-    const model = params.model || 'gemini-2.5-flash'
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${params.apiKey}`
 
     const parts: any[] = []
-    // Nur Base64 anhängen, wenn es kleiner als ~14 MB Base64 (~10 MB PDF) ist, um Geminis 20MB inline_data Limit nicht zu reißen
     if (params.pdfBase64 && params.pdfBase64.length < 14_000_000) {
       parts.push({
         inline_data: {
@@ -112,19 +148,26 @@ export async function generateQuestionsInBrowser(params: {
 
     parts.push({ text: userPrompt })
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json'
+    const primaryModel = params.model || 'gemini-3.8-flash'
+    let response = await callGeminiModel(primaryModel, params.apiKey, parts)
+
+    // Automatischer Fallback, falls das eingestellte Modell (z.B. gemini-2.5-flash) 404 NOT_FOUND liefert!
+    if (response.status === 404) {
+      const errText = await response.text()
+      // 1. Prüfen, ob die Google-Fehlermeldung direkt das neue Modell nennt ("use models/xyz")
+      const suggestedMatch = errText.match(/use models\/([a-zA-Z0-9._-]+)/i)
+      if (suggestedMatch?.[1]) {
+        response = await callGeminiModel(suggestedMatch[1], params.apiKey, parts)
+      }
+
+      // 2. Falls immer noch 404, frage die API nach den für diesen Key freigeschalteten Modellen
+      if (response.status === 404) {
+        const discoveredModel = await resolveAvailableGeminiModel(params.apiKey)
+        if (discoveredModel) {
+          response = await callGeminiModel(discoveredModel, params.apiKey, parts)
         }
-      })
-    })
+      }
+    }
 
     if (!response.ok) {
       const errText = await response.text()

@@ -132,9 +132,14 @@ const aiSettings = ref<AISettings>(
     openaiKey: envMeta.VITE_OPENAI_API_KEY || '',
     anthropicKey: envMeta.VITE_ANTHROPIC_API_KEY || '',
     ollamaUrl: 'http://localhost:11434',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-3.8-flash'
   })
 )
+
+// Automatische Migration, falls im LocalStorage noch das veraltete gemini-2.5-flash gespeichert war
+if (aiSettings.value.provider === 'gemini' && aiSettings.value.model === 'gemini-2.5-flash') {
+  aiSettings.value.model = 'gemini-3.8-flash'
+}
 
 if (!aiSettings.value.geminiKey && envMeta.VITE_GEMINI_API_KEY) {
   aiSettings.value.geminiKey = envMeta.VITE_GEMINI_API_KEY

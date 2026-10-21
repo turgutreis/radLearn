@@ -162,7 +162,7 @@ function getActiveApiKey(): string {
 
 function updateProviderModel(provider: 'gemini' | 'openai' | 'anthropic' | 'ollama') {
   aiSettings.value.provider = provider
-  if (provider === 'gemini') aiSettings.value.model = 'gemini-2.5-flash'
+  if (provider === 'gemini') aiSettings.value.model = 'gemini-3.8-flash'
   if (provider === 'openai') aiSettings.value.model = 'gpt-4o-mini'
   if (provider === 'anthropic') aiSettings.value.model = 'claude-3-5-sonnet-latest'
   if (provider === 'ollama') aiSettings.value.model = 'llama3.1'
