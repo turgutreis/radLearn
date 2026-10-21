@@ -1,0 +1,10 @@
+{
+  "name": "RadLearn – Radiologie & Strahlenschutz Trainer",
+  "short_name": "RadLearn",
+  "description": "MTR Prüfungs- und Karteikarten-Trainer für Radiologie & Strahlenschutz",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "any"
+}
