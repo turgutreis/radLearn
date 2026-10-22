@@ -5,3 +5,24 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
+
+/* Fullscreen Drawer: sanftes Einblenden von rechts */
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  transform: translateX(100%);
+  opacity: 0.6;
+}
+
+/* Von Netlify eingeblendetes "Powered by Netlify"-Badge ausblenden (überdeckt sonst die Bottom-Navigation) */
+body > [id*='netlify' i]:not(#app),
+body > [class*='netlify' i],
+body > iframe[src*='netlify'],
+body > a[href*='netlify.com'],
+netlify-badge,
+netlify-drawer {
+  display: none !important;
+}

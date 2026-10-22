@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import {
   Radiation,
   LayoutDashboard,
@@ -61,6 +61,47 @@ const {
   importBackupJson,
   resetProgress
 } = useStudyStore()
+
+// Scroll-Lock für Drawer & Modal (inkl. iOS Safari, wo overflow:hidden allein nicht reicht)
+let lockedScrollY = 0
+let isScrollLocked = false
+
+function lockBodyScroll() {
+  if (isScrollLocked) return
+  isScrollLocked = true
+  lockedScrollY = window.scrollY
+  const body = document.body
+  body.style.position = 'fixed'
+  body.style.top = `-${lockedScrollY}px`
+  body.style.left = '0'
+  body.style.right = '0'
+  body.style.width = '100%'
+  body.style.overflow = 'hidden'
+  document.documentElement.style.overflow = 'hidden'
+}
+
+function unlockBodyScroll() {
+  if (!isScrollLocked) return
+  isScrollLocked = false
+  const body = document.body
+  body.style.position = ''
+  body.style.top = ''
+  body.style.left = ''
+  body.style.right = ''
+  body.style.width = ''
+  body.style.overflow = ''
+  document.documentElement.style.overflow = ''
+  window.scrollTo(0, lockedScrollY)
+}
+
+// flush: 'sync', damit das Entsperren sofort passiert (bevor setTab nach oben scrollt)
+watch(
+  () => isMobileMenuOpen.value || showCloudModal.value,
+  (shouldLock) => (shouldLock ? lockBodyScroll() : unlockBodyScroll()),
+  { flush: 'sync' }
+)
+
+onUnmounted(unlockBodyScroll)
 
 const nextRewardTarget = computed(() => {
   const sorted = [...userProfile.value.rewards].sort((a, b) => a.cost - b.cost)
@@ -330,18 +371,15 @@ function confirmResetProgress() {
       </div>
     </header>
 
-    <!-- Mobile Slide-Over Navigation Drawer (Clean, Touch-Friendly, Zero Clutter) -->
+    <!-- Mobile Fullscreen Navigation Drawer -->
     <Teleport to="body">
-      <div v-if="isMobileMenuOpen" class="fixed inset-0 z-50 lg:hidden">
-        <!-- Backdrop -->
+      <Transition name="drawer">
+      <div v-if="isMobileMenuOpen" class="fixed inset-0 z-[60] lg:hidden">
+        <!-- Fullscreen Panel (eigener Scroll-Container, Hintergrund bleibt fixiert) -->
         <div
-          class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
-          @click="isMobileMenuOpen = false"
-        />
-
-        <!-- Slide Drawer Panel -->
-        <div class="fixed inset-y-0 right-0 w-full max-w-xs bg-slate-900 border-l border-slate-800 p-5 flex flex-col justify-between shadow-2xl overflow-y-auto">
-          <div class="space-y-5">
+          class="absolute inset-0 bg-slate-950 flex flex-col overflow-y-auto overscroll-contain px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+        >
+          <div class="space-y-5 flex-1">
             <!-- Drawer Header -->
             <div class="flex items-center justify-between pb-3 border-b border-slate-800">
               <div class="flex items-center gap-2.5">
@@ -490,7 +528,7 @@ function confirmResetProgress() {
           </div>
 
           <!-- Drawer Footer Tools (Cloud Sync, Backup, Reset) -->
-          <div class="pt-4 border-t border-slate-800 space-y-2">
+          <div class="pt-4 mt-6 border-t border-slate-800 space-y-2">
             <button
               type="button"
               @click="isMobileMenuOpen = false; showCloudModal = true"
@@ -529,12 +567,13 @@ function confirmResetProgress() {
           </div>
         </div>
       </div>
+      </Transition>
     </Teleport>
 
     <!-- Cloud Sync Setup Modal -->
     <div
       v-if="showCloudModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+      class="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overscroll-contain"
       @click.self="showCloudModal = false"
     >
       <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl">
