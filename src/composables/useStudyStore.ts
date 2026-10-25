@@ -22,6 +22,8 @@ const STORAGE_KEYS = {
   CUSTOM_DECKS: 'radlearn_custom_decks_v1',
   CUSTOM_QUESTIONS: 'radlearn_custom_questions_v1',
   FOLDERS: 'radlearn_folders_v1',
+  DECK_FOLDER_OVERRIDES: 'radlearn_deck_folder_overrides_v1',
+  DECK_ORDER: 'radlearn_deck_order_v1',
   PROGRESS: 'radlearn_progress_v1',
   PROFILE: 'radlearn_user_profile_v2', // v2 = Strengeres Punkte- & Preis-Balancing!
   AI_SETTINGS: 'radlearn_ai_settings_v1',
@@ -148,6 +150,60 @@ function recalculateFairXp(
   return currentXp
 }
 
+export function detectBestFolderForDeck(title: string, description = ''): string {
+  const text = (title + ' ' + description).toLowerCase()
+  if (
+    text.includes('nuklear') ||
+    text.includes('szinti') ||
+    text.includes('spect') ||
+    text.includes('pet') ||
+    text.includes('radiopharm') ||
+    text.includes('tracer')
+  ) {
+    return 'nuklearmedizin'
+  }
+  if (
+    text.includes('röntgen') ||
+    text.includes('roentgen') ||
+    text.includes('thorax') ||
+    text.includes('einstelltechnik') ||
+    text.includes('belichtung') ||
+    text.includes('aufnahme')
+  ) {
+    return 'roentgendiagnostik'
+  }
+  if (
+    text.includes('therapie') ||
+    text.includes('radioonk') ||
+    text.includes('linearbeschleuniger') ||
+    text.includes('linac') ||
+    text.includes('bestrahl') ||
+    text.includes('brachy')
+  ) {
+    return 'strahlentherapie'
+  }
+  if (
+    text.includes('anatomie') ||
+    text.includes('skelett') ||
+    text.includes('knochen') ||
+    text.includes('organ')
+  ) {
+    return 'anatomie'
+  }
+  if (
+    text.includes('strahlenschutz') ||
+    text.includes('strlsch') ||
+    text.includes('dosis') ||
+    text.includes('dosimetrie') ||
+    text.includes('grenzwert') ||
+    text.includes('gesetz') ||
+    text.includes('alara')
+  ) {
+    return 'strahlenschutz'
+  }
+  return 'custom'
+}
+
 const envMeta = (import.meta as any).env || {}
 
 const rawLoadedFolders = loadJson<StudyFolder[]>(STORAGE_KEYS.FOLDERS, DEFAULT_FOLDERS)
@@ -156,8 +212,20 @@ for (const df of DEFAULT_FOLDERS) mergedFoldersMap.set(df.id, df)
 for (const f of rawLoadedFolders) mergedFoldersMap.set(f.id, f)
 const folders = ref<StudyFolder[]>(Array.from(mergedFoldersMap.values()))
 
-const customDecks = ref<StudyDeck[]>(loadJson(STORAGE_KEYS.CUSTOM_DECKS, []))
+const rawCustomDecks = loadJson<StudyDeck[]>(STORAGE_KEYS.CUSTOM_DECKS, [])
+const migratedCustomDecks = rawCustomDecks.map((deck) => {
+  if (!deck.folderId || deck.folderId === 'custom') {
+    const detected = detectBestFolderForDeck(deck.title, deck.description)
+    if (detected !== 'custom') {
+      return { ...deck, folderId: detected }
+    }
+  }
+  return deck
+})
+const customDecks = ref<StudyDeck[]>(migratedCustomDecks)
 const customQuestions = ref<Question[]>(loadJson(STORAGE_KEYS.CUSTOM_QUESTIONS, []))
+const deckFolderOverrides = ref<Record<string, string>>(loadJson(STORAGE_KEYS.DECK_FOLDER_OVERRIDES, {}))
+const deckOrderList = ref<string[]>(loadJson(STORAGE_KEYS.DECK_ORDER, []))
 const progressMap = ref<Record<string, QuestionProgress>>(loadJson(STORAGE_KEYS.PROGRESS, {}))
 
 const loadedProfile = loadJson(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE)
@@ -220,6 +288,8 @@ let progressSyncTimer: ReturnType<typeof setTimeout> | null = null
 watch(folders, (val) => localStorage.setItem(STORAGE_KEYS.FOLDERS, JSON.stringify(val)), { deep: true })
 watch(customDecks, (val) => localStorage.setItem(STORAGE_KEYS.CUSTOM_DECKS, JSON.stringify(val)), { deep: true })
 watch(customQuestions, (val) => localStorage.setItem(STORAGE_KEYS.CUSTOM_QUESTIONS, JSON.stringify(val)), { deep: true })
+watch(deckFolderOverrides, (val) => localStorage.setItem(STORAGE_KEYS.DECK_FOLDER_OVERRIDES, JSON.stringify(val)), { deep: true })
+watch(deckOrderList, (val) => localStorage.setItem(STORAGE_KEYS.DECK_ORDER, JSON.stringify(val)), { deep: true })
 watch(progressMap, (val) => localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(val)), { deep: true })
 watch(userProfile, (val) => localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(val)), { deep: true })
 watch(aiSettings, (val) => localStorage.setItem(STORAGE_KEYS.AI_SETTINGS, JSON.stringify(val)), { deep: true })
@@ -242,9 +312,27 @@ export function useStudyStore() {
 
   const allDecks = computed<StudyDeck[]>(() => {
     const map = new Map<string, StudyDeck>()
-    for (const d of INITIAL_DECKS) map.set(d.id, d)
-    for (const d of customDecks.value) map.set(d.id, d)
-    return Array.from(map.values())
+    for (const d of INITIAL_DECKS) {
+      const folderId = deckFolderOverrides.value[d.id] || d.folderId || 'strahlenschutz'
+      map.set(d.id, { ...d, folderId })
+    }
+    for (const d of customDecks.value) {
+      const folderId =
+        deckFolderOverrides.value[d.id] ||
+        d.folderId ||
+        detectBestFolderForDeck(d.title, d.description)
+      map.set(d.id, { ...d, folderId })
+    }
+    const list = Array.from(map.values())
+    if (deckOrderList.value.length > 0) {
+      const orderMap = new Map(deckOrderList.value.map((id, index) => [id, index]))
+      list.sort((a, b) => {
+        const orderA = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999
+        const orderB = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999
+        return orderA - orderB
+      })
+    }
+    return list
   })
 
   const allQuestions = computed<Question[]>(() => {
@@ -635,6 +723,10 @@ export function useStudyStore() {
   }
 
   function moveDeckToFolder(deckId: string, targetFolderId: string) {
+    deckFolderOverrides.value = {
+      ...deckFolderOverrides.value,
+      [deckId]: targetFolderId
+    }
     const cd = customDecks.value.find((d) => d.id === deckId)
     if (cd) {
       cd.folderId = targetFolderId
@@ -646,6 +738,22 @@ export function useStudyStore() {
         ).catch(console.error)
       }
     }
+  }
+
+  function moveDeckOrder(deckId: string, direction: 'up' | 'down') {
+    const currentList = allDecks.value.map((d) => d.id)
+    const index = currentList.indexOf(deckId)
+    if (index === -1) return
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= currentList.length) return
+    const tmp = currentList[index]
+    currentList[index] = currentList[targetIndex]
+    currentList[targetIndex] = tmp
+    deckOrderList.value = [...currentList]
+  }
+
+  function setDeckOrder(deckIds: string[]) {
+    deckOrderList.value = [...deckIds]
   }
 
   function getFolderStats(folderId: string) {
@@ -906,6 +1014,9 @@ export function useStudyStore() {
     addFolder,
     deleteFolder,
     moveDeckToFolder,
+    moveDeckOrder,
+    setDeckOrder,
+    detectBestFolderForDeck,
     getFolderStats,
     customDecks,
     customQuestions,

@@ -32,7 +32,9 @@ import {
   Shield,
   Atom,
   Crosshair,
-  Activity
+  Activity,
+  ArrowUpDown,
+  Plus
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
 import { SUPABASE_SQL_SCHEMA } from './services/supabaseSync'
@@ -54,6 +56,9 @@ const sqlCopied = ref<boolean>(false)
 const {
   allDecks,
   folders,
+  addFolder,
+  moveDeckToFolder,
+  moveDeckOrder,
   getFolderStats,
   overallStats,
   userProfile,
@@ -74,6 +79,46 @@ const {
 const selectedFolderFilter = ref<string>('all')
 const collapsedFolders = ref<Record<string, boolean>>({})
 
+const showMoveDeckModal = ref<boolean>(false)
+const deckToMove = ref<any>(null)
+const inlineNewFolderName = ref<string>('')
+const showInlineNewFolder = ref<boolean>(false)
+
+type SortMode = 'default' | 'az' | 'questions' | 'progress-low' | 'progress-high'
+const activeSortMode = ref<SortMode>('default')
+
+function openMoveModal(deck: any) {
+  deckToMove.value = deck
+  showInlineNewFolder.value = false
+  inlineNewFolderName.value = ''
+  showMoveDeckModal.value = true
+}
+
+function selectTargetFolder(folderId: string) {
+  if (deckToMove.value) {
+    moveDeckToFolder(deckToMove.value.id, folderId)
+  }
+  showMoveDeckModal.value = false
+  deckToMove.value = null
+}
+
+function handleCreateFolderInModal() {
+  if (!inlineNewFolderName.value.trim()) return
+  const created = addFolder({ name: inlineNewFolderName.value.trim() })
+  if (deckToMove.value) {
+    moveDeckToFolder(deckToMove.value.id, created.id)
+  }
+  inlineNewFolderName.value = ''
+  showInlineNewFolder.value = false
+  showMoveDeckModal.value = false
+  deckToMove.value = null
+}
+
+function getFolderName(folderId?: string) {
+  const f = folders.value.find((item) => item.id === folderId)
+  return f ? f.name : 'Allgemein'
+}
+
 function toggleFolderCollapse(folderId: string) {
   collapsedFolders.value[folderId] = !collapsedFolders.value[folderId]
 }
@@ -86,7 +131,17 @@ const displayedFolders = computed(() => {
 })
 
 function getDecksForFolder(folderId: string) {
-  return allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
+  let list = allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
+  if (activeSortMode.value === 'az') {
+    list = [...list].sort((a, b) => a.title.localeCompare(b.title, 'de'))
+  } else if (activeSortMode.value === 'questions') {
+    list = [...list].sort((a, b) => getDeckStats(b.id).total - getDeckStats(a.id).total)
+  } else if (activeSortMode.value === 'progress-low') {
+    list = [...list].sort((a, b) => getDeckStats(a.id).percent - getDeckStats(b.id).percent)
+  } else if (activeSortMode.value === 'progress-high') {
+    list = [...list].sort((a, b) => getDeckStats(b.id).percent - getDeckStats(a.id).percent)
+  }
+  return list
 }
 
 // Scroll-Lock für Drawer & Modal (inkl. iOS Safari, wo overflow:hidden allein nicht reicht)
@@ -123,7 +178,7 @@ function unlockBodyScroll() {
 
 // flush: 'sync', damit das Entsperren sofort passiert (bevor setTab nach oben scrollt)
 watch(
-  () => isMobileMenuOpen.value || showCloudModal.value,
+  () => isMobileMenuOpen.value || showCloudModal.value || showMoveDeckModal.value,
   (shouldLock) => (shouldLock ? lockBodyScroll() : unlockBodyScroll()),
   { flush: 'sync' }
 )
@@ -844,38 +899,58 @@ function confirmResetProgress() {
             </div>
           </div>
 
-          <!-- Quick Filter Pills -->
-          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              type="button"
-              @click="selectedFolderFilter = 'all'"
-              class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition border"
-              :class="
-                selectedFolderFilter === 'all'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-800'
-              "
-            >
-              Alle Themen ({{ allDecks.length }})
-            </button>
+          <!-- Quick Filter Pills & Sort Row -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none flex-1 min-w-[260px]">
+              <button
+                type="button"
+                @click="selectedFolderFilter = 'all'"
+                class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition border"
+                :class="
+                  selectedFolderFilter === 'all'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
+                    : 'bg-slate-900 text-slate-300 hover:text-white border-slate-800'
+                "
+              >
+                Alle Themen ({{ allDecks.length }})
+              </button>
 
-            <button
-              v-for="folder in folders"
-              :key="folder.id"
-              type="button"
-              @click="selectedFolderFilter = folder.id"
-              class="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition border flex items-center gap-1.5"
-              :class="[
-                selectedFolderFilter === folder.id
-                  ? 'bg-slate-800 text-white border-amber-400 shadow'
-                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border-slate-800'
-              ]"
-            >
-              <span>{{ folder.name }}</span>
-              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-slate-400 font-bold">
-                {{ getFolderStats(folder.id).deckCount }}
+              <button
+                v-for="folder in folders"
+                :key="folder.id"
+                type="button"
+                @click="selectedFolderFilter = folder.id"
+                class="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition border flex items-center gap-1.5"
+                :class="[
+                  selectedFolderFilter === folder.id
+                    ? 'bg-slate-800 text-white border-amber-400 shadow'
+                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border-slate-800'
+                ]"
+              >
+                <span>{{ folder.name }}</span>
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-slate-400 font-bold">
+                  {{ getFolderStats(folder.id).deckCount }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Sort Selector -->
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-xs text-slate-400 hidden sm:inline-flex items-center gap-1 font-medium">
+                <ArrowUpDown class="w-3.5 h-3.5 text-amber-400" />
+                Sortierung:
               </span>
-            </button>
+              <select
+                v-model="activeSortMode"
+                class="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-500 font-medium"
+              >
+                <option value="default">Standard / Manuelle Reihenfolge</option>
+                <option value="az">Titel (A–Z)</option>
+                <option value="questions">Meiste Fragen zuerst</option>
+                <option value="progress-low">Wenigster Fortschritt (noch zu lernen)</option>
+                <option value="progress-high">Höchster Fortschritt (gemeistert)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -974,13 +1049,44 @@ function confirmResetProgress() {
                   class="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all shadow-lg"
                 >
                   <div class="space-y-3">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
                       <span class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-amber-300 border border-slate-800">
                         {{ getDeckStats(deck.id).total }} Fragen
                       </span>
-                      <span class="text-xs font-semibold text-emerald-400">
-                        {{ getDeckStats(deck.id).percent }}% gemeistert
-                      </span>
+
+                      <!-- Folder Switch Button (Mobile-first Bottom Sheet trigger) -->
+                      <div class="flex items-center gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          @click.stop="openMoveModal(deck)"
+                          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition shadow-sm"
+                          title="In anderen Themenordner verschieben"
+                        >
+                          <Folder class="w-3.5 h-3.5 text-amber-400" />
+                          <span class="max-w-[110px] truncate">{{ getFolderName(deck.folderId) }}</span>
+                          <ChevronDown class="w-3 h-3 opacity-60" />
+                        </button>
+
+                        <!-- Reorder Up/Down buttons (Visible in manual/default sort mode) -->
+                        <div v-if="activeSortMode === 'default'" class="inline-flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
+                          <button
+                            type="button"
+                            @click.stop="moveDeckOrder(deck.id, 'up')"
+                            class="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition"
+                            title="Nach oben verschieben"
+                          >
+                            <ChevronUp class="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            @click.stop="moveDeckOrder(deck.id, 'down')"
+                            class="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition"
+                            title="Nach unten verschieben"
+                          >
+                            <ChevronDown class="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <h4 class="text-sm sm:text-base font-bold text-white leading-snug">
@@ -1140,5 +1246,130 @@ function confirmResetProgress() {
         </button>
       </div>
     </nav>
+
+    <!-- Move Deck to Folder Modal / Bottom Sheet (Mobile-First & Tablet-optimized) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-150 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showMoveDeckModal"
+          class="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain"
+          @click.self="showMoveDeckModal = false"
+        >
+          <div
+            class="bg-slate-900 border border-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-200"
+          >
+            <!-- Mobile Grab Handle -->
+            <div class="w-12 h-1.5 bg-slate-700/80 rounded-full mx-auto sm:hidden" />
+
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Themenordner wechseln</span>
+                <h3 class="text-base sm:text-lg font-bold text-white mt-0.5 leading-snug">
+                  „{{ deckToMove?.title }}“
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">
+                  Tippe auf den gewünschten Ordner, um dieses Lernset dorthin zu verschieben:
+                </p>
+              </div>
+              <button
+                type="button"
+                @click="showMoveDeckModal = false"
+                class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white shrink-0"
+              >
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- List of Folders (Big touch targets for Pixel, iPhone & iPad) -->
+            <div class="space-y-2 pt-1">
+              <button
+                v-for="folder in folders"
+                :key="folder.id"
+                type="button"
+                @click="selectTargetFolder(folder.id)"
+                class="w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 active:scale-[0.99]"
+                :class="[
+                  (deckToMove?.folderId || 'custom') === folder.id
+                    ? 'bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10'
+                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-200'
+                ]"
+              >
+                <div class="flex items-center gap-3 min-w-0">
+                  <div
+                    class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
+                    :class="[
+                      folder.id === 'nuklearmedizin' ? 'bg-purple-500/15 border-purple-500/30 text-purple-400' :
+                      folder.id === 'strahlenschutz' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
+                      folder.id === 'roentgendiagnostik' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' :
+                      folder.id === 'strahlentherapie' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
+                      folder.id === 'anatomie' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' :
+                      'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                    ]"
+                  >
+                    <Atom v-if="folder.id === 'nuklearmedizin'" class="w-5 h-5" />
+                    <Shield v-else-if="folder.id === 'strahlenschutz'" class="w-5 h-5" />
+                    <Crosshair v-else-if="folder.id === 'strahlentherapie'" class="w-5 h-5" />
+                    <Activity v-else-if="folder.id === 'anatomie'" class="w-5 h-5" />
+                    <Folder v-else class="w-5 h-5" />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-sm text-white truncate">{{ folder.name }}</div>
+                    <div class="text-[11px] text-slate-400">
+                      {{ getFolderStats(folder.id).deckCount }} Decks · {{ getFolderStats(folder.id).total }} Fragen
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="(deckToMove?.folderId || 'custom') === folder.id" class="flex items-center gap-1.5 text-xs font-bold text-amber-400 shrink-0">
+                  <Check class="w-4 h-4" />
+                  <span class="text-[11px]">Hier</span>
+                </div>
+                <ChevronRight v-else class="w-4 h-4 text-slate-600 shrink-0" />
+              </button>
+            </div>
+
+            <!-- Inline New Folder Creator -->
+            <div class="pt-2 border-t border-slate-800">
+              <div v-if="!showInlineNewFolder">
+                <button
+                  type="button"
+                  @click="showInlineNewFolder = true"
+                  class="w-full p-3 rounded-2xl bg-slate-950 border border-dashed border-slate-700 text-slate-300 hover:text-white hover:border-amber-500/50 text-xs font-bold flex items-center justify-center gap-2 transition"
+                >
+                  <Plus class="w-4 h-4 text-amber-400" />
+                  <span>Neuen Themenordner anlegen & dorthin verschieben</span>
+                </button>
+              </div>
+              <div v-else class="space-y-2">
+                <label class="text-xs font-semibold text-slate-300">Neuer Ordnername:</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="inlineNewFolderName"
+                    type="text"
+                    placeholder="z.B. Nuklearmedizin oder Klausur..."
+                    class="flex-1 bg-slate-950 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                    @keyup.enter="handleCreateFolderInModal"
+                  />
+                  <button
+                    type="button"
+                    @click="handleCreateFolderInModal"
+                    class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0"
+                  >
+                    Verschieben
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
