@@ -22,7 +22,11 @@ const props = defineProps<{
   initialDeckId?: string
 }>()
 
-const { allDecks, getDeckQuestions, getProgress, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
+const { allDecks, folders, getDeckQuestions, getProgress, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
+
+function getFolderDecks(folderId: string) {
+  return allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
+}
 
 const selectedDeckId = ref<string>(props.initialDeckId || 'all')
 const examMode = ref<boolean>(false) // false = Sofort-Feedback (Lernmodus), true = Prüfungsmodus
@@ -184,9 +188,15 @@ function repeatWrongOnly() {
           <option value="workout">⚡ 10-Fragen Tages-Workout (Intelligent gemischt)</option>
           <option value="wrong">🔁 Zuletzt falsch beantwortet ({{ getDeckQuestions('wrong').length }})</option>
           <option value="bookmarked">⭐ Gemerkte Fragen ({{ getDeckQuestions('bookmarked').length }})</option>
-          <option v-for="deck in allDecks" :key="deck.id" :value="deck.id">
-            {{ deck.title }} ({{ getDeckQuestions(deck.id).length }})
-          </option>
+
+          <optgroup v-for="folder in folders" :key="folder.id" :label="folder.name">
+            <option v-if="getFolderDecks(folder.id).length > 1" :value="'folder:' + folder.id">
+              📂 Ganzen Ordner trainieren ({{ getDeckQuestions('folder:' + folder.id).length }} Fragen)
+            </option>
+            <option v-for="deck in getFolderDecks(folder.id)" :key="deck.id" :value="deck.id">
+              {{ deck.title }} ({{ getDeckQuestions(deck.id).length }})
+            </option>
+          </optgroup>
         </select>
       </div>
 

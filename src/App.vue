@@ -25,7 +25,14 @@ import {
   Heart,
   Zap,
   Menu,
-  ChevronRight
+  ChevronRight,
+  Folder,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  Atom,
+  Crosshair,
+  Activity
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
 import { SUPABASE_SQL_SCHEMA } from './services/supabaseSync'
@@ -46,6 +53,8 @@ const sqlCopied = ref<boolean>(false)
 
 const {
   allDecks,
+  folders,
+  getFolderStats,
   overallStats,
   userProfile,
   availableCoins,
@@ -61,6 +70,24 @@ const {
   importBackupJson,
   resetProgress
 } = useStudyStore()
+
+const selectedFolderFilter = ref<string>('all')
+const collapsedFolders = ref<Record<string, boolean>>({})
+
+function toggleFolderCollapse(folderId: string) {
+  collapsedFolders.value[folderId] = !collapsedFolders.value[folderId]
+}
+
+const displayedFolders = computed(() => {
+  if (selectedFolderFilter.value === 'all') {
+    return folders.value
+  }
+  return folders.value.filter((f) => f.id === selectedFolderFilter.value)
+})
+
+function getDecksForFolder(folderId: string) {
+  return allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
+}
 
 // Scroll-Lock für Drawer & Modal (inkl. iOS Safari, wo overflow:hidden allein nicht reicht)
 let lockedScrollY = 0
@@ -784,68 +811,225 @@ function confirmResetProgress() {
           </div>
         </div>
 
-        <!-- Study Decks Grid -->
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-base sm:text-lg font-bold text-white">Lernmodule & Themenblöcke ({{ allDecks.length }})</h3>
-            <button
-              type="button"
-              @click="confirmResetProgress"
-              class="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1 transition"
-            >
-              <RotateCcw class="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </button>
+        <!-- Folders Header & Quick-Filter Bar -->
+        <div class="space-y-3 pt-2">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Folder class="w-5 h-5 text-amber-400" />
+                <span>Themen-Ordner & Lernmodule ({{ allDecks.length }} Decks)</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Strukturiert nach den offiziellen MTR-Ausbildungsbereichen. Trainiere einzelne Decks oder ganze Themenblöcke!
+              </p>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="setTab('upload')"
+                class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+              >
+                <UploadCloud class="w-3.5 h-3.5" />
+                <span>+ Neues Deck / Foto</span>
+              </button>
+              <button
+                type="button"
+                @click="confirmResetProgress"
+                class="p-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-500 hover:text-rose-400 transition"
+                title="Lernfortschritt zurücksetzen"
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            <div
-              v-for="deck in allDecks"
-              :key="deck.id"
-              class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 transition-all shadow-lg"
+          <!-- Quick Filter Pills -->
+          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              @click="selectedFolderFilter = 'all'"
+              class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition border"
+              :class="
+                selectedFolderFilter === 'all'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow'
+                  : 'bg-slate-900 text-slate-300 hover:text-white border-slate-800'
+              "
             >
-              <div class="space-y-3">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-amber-300 border border-slate-700">
-                    {{ getDeckStats(deck.id).total }} Fragen
-                  </span>
-                  <span class="text-xs font-semibold text-emerald-400">
-                    {{ getDeckStats(deck.id).percent }}% gemeistert
-                  </span>
+              Alle Themen ({{ allDecks.length }})
+            </button>
+
+            <button
+              v-for="folder in folders"
+              :key="folder.id"
+              type="button"
+              @click="selectedFolderFilter = folder.id"
+              class="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition border flex items-center gap-1.5"
+              :class="[
+                selectedFolderFilter === folder.id
+                  ? 'bg-slate-800 text-white border-amber-400 shadow'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border-slate-800'
+              ]"
+            >
+              <span>{{ folder.name }}</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-slate-400 font-bold">
+                {{ getFolderStats(folder.id).deckCount }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Folders Accordion Section -->
+        <div class="space-y-5">
+          <div
+            v-for="folder in displayedFolders"
+            :key="folder.id"
+            class="bg-slate-900/70 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl transition-all"
+          >
+            <!-- Folder Header Card -->
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div
+                class="flex items-center gap-3 cursor-pointer select-none group flex-1 min-w-[220px]"
+                @click="toggleFolderCollapse(folder.id)"
+              >
+                <div
+                  class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition group-hover:scale-105"
+                  :class="[
+                    folder.id === 'nuklearmedizin' ? 'bg-purple-500/15 border-purple-500/30 text-purple-400' :
+                    folder.id === 'strahlenschutz' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
+                    folder.id === 'roentgendiagnostik' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' :
+                    folder.id === 'strahlentherapie' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
+                    folder.id === 'anatomie' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' :
+                    'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                  ]"
+                >
+                  <Atom v-if="folder.id === 'nuklearmedizin'" class="w-5 h-5" />
+                  <Shield v-else-if="folder.id === 'strahlenschutz'" class="w-5 h-5" />
+                  <Crosshair v-else-if="folder.id === 'strahlentherapie'" class="w-5 h-5" />
+                  <Activity v-else-if="folder.id === 'anatomie'" class="w-5 h-5" />
+                  <Folder v-else class="w-5 h-5" />
                 </div>
-
-                <h4 class="text-sm sm:text-base font-bold text-white leading-snug">
-                  {{ deck.title }}
-                </h4>
-                <p class="text-xs text-slate-400 leading-relaxed">
-                  {{ deck.description }}
-                </p>
-
-                <!-- Progress bar -->
-                <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                  <div
-                    class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
-                    :style="{ width: `${getDeckStats(deck.id).percent}%` }"
-                  />
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-base sm:text-lg font-bold text-white group-hover:text-amber-400 transition">
+                      {{ folder.name }}
+                    </h3>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">
+                      {{ getFolderStats(folder.id).deckCount }} Decks · {{ getFolderStats(folder.id).total }} Fragen
+                    </span>
+                  </div>
+                  <p v-if="folder.description" class="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                    {{ folder.description }}
+                  </p>
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/80">
+              <div class="flex items-center gap-2 shrink-0">
+                <!-- Train Whole Folder Button -->
                 <button
+                  v-if="getFolderStats(folder.id).total > 0"
                   type="button"
-                  @click="startQuizForDeck(deck.id)"
-                  class="px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                  @click="startQuizForDeck('folder:' + folder.id)"
+                  class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-500/10 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition shadow"
+                  title="Alle Fragen dieses Themengebiets auf einmal trainieren"
                 >
-                  <CheckSquare class="w-3.5 h-3.5" />
-                  MC-Quiz
+                  <Zap class="w-3.5 h-3.5 text-amber-400" />
+                  <span class="hidden sm:inline">Ganzen Ordner trainieren</span>
+                  <span class="sm:hidden">Ordner üben</span>
                 </button>
+
+                <!-- Collapse Toggle -->
                 <button
                   type="button"
-                  @click="startFlashcardsForDeck(deck.id)"
-                  class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition"
+                  @click="toggleFolderCollapse(folder.id)"
+                  class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition"
+                  :title="collapsedFolders[folder.id] ? 'Ordner aufklappen' : 'Ordner einklappen'"
                 >
-                  <Layers class="w-3.5 h-3.5" />
-                  Karteikarten
+                  <ChevronUp v-if="!collapsedFolders[folder.id]" class="w-4 h-4" />
+                  <ChevronDown v-else class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <!-- Folder Overall Progress Bar -->
+            <div v-if="getFolderStats(folder.id).total > 0" class="space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Themenfortschritt</span>
+                <span class="text-emerald-400 font-semibold">{{ getFolderStats(folder.id).percent }}% gemeistert</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300"
+                  :style="{ width: `${getFolderStats(folder.id).percent}%` }"
+                />
+              </div>
+            </div>
+
+            <!-- Decks Grid inside this folder -->
+            <div v-if="!collapsedFolders[folder.id]">
+              <div v-if="getDecksForFolder(folder.id).length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 pt-2">
+                <div
+                  v-for="deck in getDecksForFolder(folder.id)"
+                  :key="deck.id"
+                  class="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all shadow-lg"
+                >
+                  <div class="space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-amber-300 border border-slate-800">
+                        {{ getDeckStats(deck.id).total }} Fragen
+                      </span>
+                      <span class="text-xs font-semibold text-emerald-400">
+                        {{ getDeckStats(deck.id).percent }}% gemeistert
+                      </span>
+                    </div>
+
+                    <h4 class="text-sm sm:text-base font-bold text-white leading-snug">
+                      {{ deck.title }}
+                    </h4>
+                    <p class="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                      {{ deck.description }}
+                    </p>
+
+                    <!-- Progress bar -->
+                    <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                      <div
+                        class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
+                        :style="{ width: `${getDeckStats(deck.id).percent}%` }"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      @click="startQuizForDeck(deck.id)"
+                      class="px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                    >
+                      <CheckSquare class="w-3.5 h-3.5" />
+                      MC-Quiz
+                    </button>
+                    <button
+                      type="button"
+                      @click="startFlashcardsForDeck(deck.id)"
+                      class="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-800 font-semibold text-xs flex items-center justify-center gap-1.5 transition"
+                    >
+                      <Layers class="w-3.5 h-3.5" />
+                      Karteikarten
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty folder placeholder -->
+              <div v-else class="text-center p-8 bg-slate-950/40 border border-dashed border-slate-800 rounded-2xl space-y-2">
+                <p class="text-xs text-slate-400">In diesem Themengebiet sind noch keine Module vorhanden.</p>
+                <button
+                  type="button"
+                  @click="setTab('upload')"
+                  class="text-xs text-amber-400 hover:text-amber-300 font-semibold inline-flex items-center gap-1"
+                >
+                  <UploadCloud class="w-3.5 h-3.5" />
+                  <span>PDF-Skript oder Buchfoto hochladen</span>
                 </button>
               </div>
             </div>

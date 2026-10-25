@@ -17,8 +17,18 @@ export interface Question {
   flashcardBack: string
 }
 
+export interface StudyFolder {
+  id: string
+  name: string
+  icon: string
+  color: string
+  description?: string
+  isBuiltIn?: boolean
+}
+
 export interface StudyDeck {
   id: string
+  folderId?: string
   title: string
   description: string
   icon: string

@@ -129,6 +129,9 @@ async function callGeminiModel(modelName: string, apiKey: string, parts: any[]) 
 export async function generateQuestionsInBrowser(params: {
   text?: string
   pdfBase64?: string
+  imageBase64?: string
+  imageMimeType?: string
+  images?: Array<{ base64: string; mimeType: string }>
   fileName?: string
   provider: 'gemini' | 'openai' | 'anthropic' | 'ollama'
   apiKey: string
@@ -154,9 +157,30 @@ export async function generateQuestionsInBrowser(params: {
       })
     }
 
-    const userPrompt = `Erstelle bitte genau ${count} vielfältige, detailreiche Prüfungsfragen (Multiple Choice, Fallbeispiele, Rechenaufgaben) inklusive Flashcards aus diesem Lernmaterial.${
+    if (params.images && params.images.length > 0) {
+      for (const img of params.images) {
+        if (img.base64 && img.base64.length < 14_000_000) {
+          parts.push({
+            inline_data: {
+              mime_type: img.mimeType || 'image/jpeg',
+              data: img.base64
+            }
+          })
+        }
+      }
+    } else if (params.imageBase64 && params.imageBase64.length < 14_000_000) {
+      parts.push({
+        inline_data: {
+          mime_type: params.imageMimeType || 'image/jpeg',
+          data: params.imageBase64
+        }
+      })
+    }
+
+    const isImageSource = Boolean(params.imageBase64 || (params.images && params.images.length > 0))
+    const userPrompt = `Erstelle bitte genau ${count} vielfältige, detailreiche Prüfungsfragen (Multiple Choice, Fallbeispiele, Diagramm- & Schemafragen, Rechenaufgaben) inklusive Flashcards aus diesem Lernmaterial (${isImageSource ? 'Buchfoto / Abbildung' : 'Skript / PDF'}). Beziehe auch enthaltene Schemata, Grafiken, Bildbeschriftungen und Tabellen mit ein!${
       params.focusAreas ? `\nBesonderer Fokus auf: ${params.focusAreas}` : ''
-    }${params.text ? `\n\nExtrahierter Text (${params.fileName || 'Skript'}):\n${params.text.slice(0, 120000)}` : ''}`
+    }${params.text ? `\n\nExtrahierter Text (${params.fileName || 'Lernmaterial'}):\n${params.text.slice(0, 120000)}` : ''}`
 
     parts.push({ text: userPrompt })
 
@@ -219,6 +243,16 @@ export async function generateQuestionsInBrowser(params: {
       params.focusAreas ? `\nBesonderer Fokus auf: ${params.focusAreas}` : ''
     }\n\nLernmaterial (${params.fileName || 'Skript'}):\n${(params.text || '').slice(0, 100000)}`
 
+    const userContent: any[] = [{ type: 'text', text: userPrompt }]
+    if (params.imageBase64) {
+      userContent.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${params.imageMimeType || 'image/jpeg'};base64,${params.imageBase64}`
+        }
+      })
+    }
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -231,7 +265,7 @@ export async function generateQuestionsInBrowser(params: {
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt }
+          { role: 'user', content: userContent }
         ]
       })
     })

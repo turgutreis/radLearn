@@ -1,8 +1,60 @@
-import type { StudyDeck, Question, MatchingPair } from '../types'
+import type { StudyDeck, Question, MatchingPair, StudyFolder } from '../types'
+
+export const DEFAULT_FOLDERS: StudyFolder[] = [
+  {
+    id: 'strahlenschutz',
+    name: 'Strahlenschutz, Recht & Dosimetrie',
+    icon: 'Shield',
+    color: 'amber',
+    description: 'StrlSchG, StrlSchV, Grenzwerte, Personendosimetrie & Fristen',
+    isBuiltIn: true
+  },
+  {
+    id: 'nuklearmedizin',
+    name: 'Nuklearmedizin & Radiopharmaka',
+    icon: 'Atom',
+    color: 'purple',
+    description: 'Radiotracer, Szintigrafie, SPECT, PET & Theranostik',
+    isBuiltIn: true
+  },
+  {
+    id: 'roentgendiagnostik',
+    name: 'Röntgendiagnostik & Einstelltechnik',
+    icon: 'Bone',
+    color: 'cyan',
+    description: 'Skelett, Thorax, Abdomen, Belichtung & Bildkriterien',
+    isBuiltIn: true
+  },
+  {
+    id: 'strahlentherapie',
+    name: 'Strahlentherapie & Radioonkologie',
+    icon: 'Crosshair',
+    color: 'rose',
+    description: 'Linearbeschleuniger, Bestrahlungsplanung & Brachytherapie',
+    isBuiltIn: true
+  },
+  {
+    id: 'anatomie',
+    name: 'Anatomie & Physiologie',
+    icon: 'Activity',
+    color: 'emerald',
+    description: 'Skelettsystem, Organe & Schnittbildanatomie',
+    isBuiltIn: true
+  },
+  {
+    id: 'custom',
+    name: 'Eigene Skripte & Uploads',
+    icon: 'Folder',
+    color: 'blue',
+    description: 'Individuelle Vorlesungsmitschriften, Buchseiten & Übungssets',
+    isBuiltIn: true
+  }
+]
 
 export const INITIAL_DECKS: StudyDeck[] = [
   {
     id: 'deck-gesetze',
+    folderId: 'strahlenschutz',
     title: '1. Gesetze, Behörden & Grundsätze',
     description: 'EURATOM, Atomgesetz, StrlSchG (218 §§), StrlSchV (200 §§), MTBG, Regierungspräsidien Ba-Wü & ALARA.',
     icon: 'Scale',
@@ -22,6 +74,7 @@ export const INITIAL_DECKS: StudyDeck[] = [
   },
   {
     id: 'deck-dosis',
+    folderId: 'strahlenschutz',
     title: '2. Physikalische & Biologische Dosisgrößen',
     description: 'Gray vs. Sievert, Energiedosis, Äquivalentdosis, Effektive Dosis, wR & wT, LET, RBW, DFP und Halbwertszeiten.',
     icon: 'Atom',
@@ -42,6 +95,7 @@ export const INITIAL_DECKS: StudyDeck[] = [
   },
   {
     id: 'deck-dosimetrie',
+    folderId: 'strahlenschutz',
     title: '3. Personendosimetrie, Messgrößen & DRW',
     description: 'OSL-/Filmdosimeter, Hp(10), Hp(3), Hp(0,07), Ortsdosis H*(10), ODL, Schwangere & Diagnostische Referenzwerte (§ 125).',
     icon: 'Gauge',
@@ -61,6 +115,7 @@ export const INITIAL_DECKS: StudyDeck[] = [
   },
   {
     id: 'deck-grenzwerte',
+    folderId: 'strahlenschutz',
     title: '4. Grenzwerte, Kategorien & Schutzbereiche',
     description: 'Kat. A & B, Berufslebensdosis (400 mSv), Überwachungs-, Kontroll- & Sperrbereich, Schwangere & Rechenaufgaben.',
     icon: 'ShieldAlert',
@@ -82,6 +137,7 @@ export const INITIAL_DECKS: StudyDeck[] = [
   },
   {
     id: 'deck-organisation',
+    folderId: 'strahlenschutz',
     title: '5. Betriebliche Organisation, Inbetriebnahme & Recht',
     description: 'SSV, SSBV, SSB, MPE, Fachkunde vs. Kenntnisse, Teleradiologie, Genehmigungs- vs. Anzeigeverfahren & Prüfungen.',
     icon: 'Building2',
@@ -102,6 +158,7 @@ export const INITIAL_DECKS: StudyDeck[] = [
   },
   {
     id: 'deck-freigabe-fristen',
+    folderId: 'strahlenschutz',
     title: '6. Freigabe, Kontamination, Radon & Alle Fristen',
     description: 'Freigabeverfahren (10 µSv/a, 10 HWZ), Vorkommnis vs. Notfall vs. Störfall, Radon (300 Bq/m³), Natürliche Strahler & Aufbewahrungsfristen.',
     icon: 'Clock',
@@ -118,6 +175,24 @@ export const INITIAL_DECKS: StudyDeck[] = [
       'Radon-222 (§§ 124–132): Referenzwert in Aufenthaltsräumen & Arbeitsplätzen (EG/Keller) = 300 Bq/m³. Messung innerhalb von 18 Monaten, Aufzeichnungen 5 Jahre archivieren. Ab > 6 mSv/a greift beruflicher Strahlenschutz.',
       'Nuklidkarte Farben: Alpha-Strahler = GELB (Rn-222, Po-210 in Tabak; 4He-Kern, A-4, Z-2), Beta-Minus = BLAU (C-14, H-3, Pb-210; n → p + e⁻ + Anti-ν, Z+1, A gleich), Beta-Plus = ROT (p → n + e⁺ + ν, Z-1, A gleich).',
       'Wichtige Aufbewahrungsfristen: 1 Jahr (Unterweisung Begleitpersonen), 5 Jahre (Personal-Unterweisung, Bildgebung, Messtechn. Überwachung, Radon, Dosis SS), 10 Jahre (OSL-Personendosis durch SSV, Konstanzprüfung, Messgeräte-Wartung, Kontaminationsüberschreitung, Untersuchungsdaten Volljähriger), 30 Jahre (Behandlung/Therapie, Vorkommnis, Bestand HWZ>100d), 75. LJ / mind. 30 J. / max. 100 J. (Summe berufl. Exposition).'
+    ]
+  },
+  {
+    id: 'deck-nuk-prinzipien',
+    folderId: 'nuklearmedizin',
+    title: '1. Prinzipien der Nuklearmedizin & Radiotracer',
+    description: 'Einführung nach Neumaier: Radiotracer (Substrat + Radionuklid), Szintigrafie, SPECT, PET, Funktionsdiagnostik vs. Radiologie & Theranostik.',
+    icon: 'Atom',
+    color: 'purple',
+    sourceFileName: 'Neumaier_Prinzipien_der_Nuklearmedizin_S20.jpg',
+    createdAt: '2026-10-25',
+    isBuiltIn: true,
+    summaryPoints: [
+      'Nuklearmedizin vs. Radiologie: Radiologie bildet Anatomie/Morphologie durch gewebespezifische Absorption externer Röntgenstrahlung ab. Nuklearmedizin visualisiert und quantifiziert Stoffwechsel & physiologische Prozesse von innen nach außen mittels verabreichten Radiopharmaka.',
+      'Radiotracer-Aufbau: Biologisch selektiver Ligand/Substrat (bindet hochaffin an Zielstruktur wie Tumor oder Rezeptor) + Radionuklid (Strahlenquelle zur externen Messung oder gezielten Zerstörung).',
+      'Detektionsverfahren: Planare Szintigrafie (Gammakamera 2D), SPECT (rotierende Kameraköpfe für 3D-Einzelphotonen-Schnittbilder) und PET (geschlossener Detektorring für Positronen-Koinzidenzmessung).',
+      'Theranostik: Kombination aus Diagnostik & zielgerichteter Therapie – exakt derselbe Ligand wird mit Diagnostik- oder Therapienukliden markiert (z.B. PSMA bei Prostatakarzinomen).',
+      'Strahlenschutz: Höchste Relevanz, da mit offenen Radionukliden hantiert wird (Kontaminations- und Inkorporationsschutz im Heißlabor).'
     ]
   }
 ]
@@ -993,6 +1068,168 @@ export const INITIAL_QUESTIONS: Question[] = [
     type: 'mc',
     flashcardFront: 'Wie lange müssen die Aufzeichnungen über die berufliche Gesamtexposition (§ 167 StrlSchG) aufbewahrt werden?',
     flashcardBack: '• Bis die überwachte Person das 75. Lebensjahr vollendet hat (oder hätte),\n• mindestens jedoch 30 Jahre nach Beendigung der Beschäftigung,\n• längstens bis zur Vollendung des 100. Lebensjahres.\n(Laufende OSL-Werte beim SSV nach § 76: 10 Jahre).'
+  },
+
+  // ================= DECK 7: PRINZIPIEN DER NUKLEARMEDIZIN (BERND NEUMAIER, S. 20) =================
+  {
+    id: 'q-nuk-1',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Worin liegt der fundamentale Unterschied zwischen der nuklearmedizinischen Diagnostik und klassischen radiologischen Röntgenverfahren?',
+    options: [
+      'In der Nuklearmedizin wird im Körper generierte Strahlung eines zuvor verabreichten Radiopharmakons zur Funktions- und Stoffwechseldarstellung gemessen; in der Radiologie wird die Abschwächung extern erzeugter Röntgenstrahlung für anatomische Bilder genutzt.',
+      'In der Nuklearmedizin wird der Patient mit einem Röntgenlaser bestrahlt, während in der Radiologie ausschließlich Ultraschall verwendet wird.',
+      'Die Nuklearmedizin liefert ausschließlich hochauflösende Knochenstrukturen, während die Radiologie Weichteilmetabolismus visualisiert.',
+      'Die Radiologie nutzt offene radioaktive Stoffe, während in der Nuklearmedizin ausschließlich geschlossene Strahlenquellen Anwendung finden.'
+    ],
+    correctIndex: 0,
+    explanation: 'Nach den Prinzipien der Nuklearmedizin (Neumaier) nutzen klassische radiologische Verfahren die gewebespezifische Absorption extern generierter Röntgenstrahlen für anatomische Bilder. Die Nuklearmedizin hingegen nutzt die im Körper generierte Strahlung eines zuvor applizierten Radiopharmakons zur Visualisierung und Quantifizierung physiologischer bzw. pathophysiologischer Prozesse (von innen nach außen).',
+    mnemonic: 'Radiologie = Anatomie von außen durchleuchtet. Nuklearmedizin = Funktion & Stoffwechsel von innen heraus emittiert.',
+    lawReference: 'Neumaier: Prinzipien der Nuklearmedizin, S. 20',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'leicht',
+    type: 'mc',
+    flashcardFront: 'Grundunterschied: Nuklearmedizin vs. Radiologie?',
+    flashcardBack: '• Radiologie: Anatomische Bilder durch gewebespezifische Absorption extern erzeugter Röntgenstrahlung.\n• Nuklearmedizin: Visualisierung physiologischer/metabolischer Prozesse durch im Körper generierte Strahlung eines verabreichten Radiopharmakons.'
+  },
+  {
+    id: 'q-nuk-2',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Aus welchen zwei Hauptkomponenten ist ein Radiotracer (Radiopharmakon) laut dem dargestellten Schema (Abb. 1.1) aufgebaut?',
+    options: [
+      'Aus einem biologisch selektiven Liganden/Substrat (Carrier) und einem Radionuklid als Strahler.',
+      'Aus jodiertem Röntgenkontrastmittel und einer Blei-Abschirmung.',
+      'Aus einem inaktiven Trägerprotein und einem Ultraschallverstärker.',
+      'Aus zwei identischen Positronen ohne Trägerstoff.'
+    ],
+    correctIndex: 0,
+    explanation: 'Gemäß Abb. 1.1 entsteht ein Radiotracer durch die Verbindung eines Liganden/Substrats (welches selektiv mit einer biologischen Zielstruktur wie einem Tumor oder Rezeptor wechselwirkt) mit einem Radionuklid (welches die messbare Gamma- oder Positronenstrahlung aussendet).',
+    mnemonic: 'Radiotracer = Ligand (Navigationssystem zum Tumor) + Radionuklid (Leuchtfeuer/Strahler).',
+    lawReference: 'Neumaier: Abb. 1.1, S. 20',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'leicht',
+    type: 'mc',
+    flashcardFront: 'Wie ist ein Radiotracer aufgebaut (Abb. 1.1)?',
+    flashcardBack: 'Ligand / Substrat (tritt selektiv mit Zielgewebe/Rezeptor in Wechselwirkung)\n+\nRadionuklid (emittiert Strahlung zur Detektion oder Zerstörung)\n=\nRadiotracer (Radiopharmakon)'
+  },
+  {
+    id: 'q-nuk-3',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Welches nuklearmedizinische Bildgebungsverfahren zeichnet sich laut Abb. 1.1 durch einen vollständigen, ringförmigen Detektorkranz um den Patienten aus?',
+    options: [
+      'PET (Positronenemissionstomografie)',
+      'Planare Szintigrafie mit Gammakamera',
+      'SPECT (Einzelphotonen-Emissionscomputertomografie)',
+      'Konventionelles Röntgen mit Wandstativ'
+    ],
+    correctIndex: 0,
+    explanation: 'In Abb. 1.1 ist die PET (Positronenemissionstomografie) schematisch mit einem geschlossenen Detektorring um den Patienten dargestellt, der die Vernichtungsstrahlung (511 keV Photonenpaare in 180°-Koinzidenz) erfasst. SPECT nutzt rotierende Detektorköpfe.',
+    mnemonic: 'PET = Ringförmige Detektion (Ring-Gantry) für Koinzidenzmessung.',
+    lawReference: 'Neumaier: Abb. 1.1, S. 20',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'mittel',
+    type: 'mc',
+    flashcardFront: 'Welche Detektorgeometrie besitzt die PET laut Abb. 1.1?',
+    flashcardBack: 'Einen geschlossenen ringförmigen Detektorkranz um den Patienten zur Koinzidenzerfassung der Positronen-Vernichtungsstrahlung.'
+  },
+  {
+    id: 'q-nuk-4',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Wofür steht das Akronym SPECT in der nuklearmedizinischen Bildgebung?',
+    options: [
+      'Single Photon Emission Computed Tomography (Einzelphotonen-Emissionscomputertomografie)',
+      'Selective Positron Energy Count Technique',
+      'Serial Photon Emission Contrast Tracking',
+      'Standard Proton Electron Computed Testing'
+    ],
+    correctIndex: 0,
+    explanation: 'SPECT steht für Single Photon Emission Computed Tomography (bzw. auf Deutsch: Einzelphotonen-Emissionscomputertomografie). Dabei rotieren Gammakameraköpfe um den Patienten, um dreidimensionale Schnittbilder der Aktivitätsverteilung zu generieren.',
+    mnemonic: 'SPECT = Single Photon Emission Computed Tomography (Einzelphotonen-Schnittbild).',
+    lawReference: 'Neumaier: Abb. 1.1 Legende, S. 20',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'mittel',
+    type: 'mc',
+    flashcardFront: 'Wofür steht SPECT (ausgeschrieben und übersetzt)?',
+    flashcardBack: '• Single Photon Emission Computed Tomography\n• Auf Deutsch: Einzelphotonen-Emissionscomputertomografie\n(Erzeugt 3D-Schnittbilder durch rotierende Kameraköpfe).'
+  },
+  {
+    id: 'q-nuk-5',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Warum kommt dem Strahlenschutz in nuklearmedizinischen Abteilungen laut Lehrbuch eine besonders hohe Bedeutung zu?',
+    options: [
+      'Weil mit offenen Radionukliden und Radiopharmaka umgegangen wird, wodurch besondere Risiken für Kontamination und Inkorporation bestehen.',
+      'Weil in der Nuklearmedizin die stärkste kosmische Höhenstrahlung erzeugt wird.',
+      'Weil Röntgenröhren in der Nuklearmedizin mit über 500 kV betrieben werden müssen.',
+      'Weil die Patienten nach der Untersuchung dauerhaft im Kontrollbereich verbleiben müssen.'
+    ],
+    correctIndex: 0,
+    explanation: 'Da radioaktive Strahlung Zellen schädigen kann und in der Nuklearmedizin mit offenen Radionukliden bzw. flüssigen/inhalativen Radiopharmaka gearbeitet wird, bestehen besondere Gefahren der Kontamination (Verschleppung) und Inkorporation (Aufnahme in den Körper). Entsprechend gelten strenge Schutzvorschriften (z.B. Heißlabor, Abklinganlage, 4 A statt 3 A).',
+    mnemonic: 'Nuklearmedizin = Offene radioaktive Stoffe → Kontaminations- & Inkorporationsschutz beachten!',
+    lawReference: 'Neumaier: S. 20, Abs. 1',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'mittel',
+    type: 'mc',
+    flashcardFront: 'Warum ist Strahlenschutz in der Nuklearmedizin besonders speziell?',
+    flashcardBack: 'Weil mit offenen Radionukliden gearbeitet wird. Neben externer Bestrahlung drohen Kontamination (Arbeitsflächen, Kleidung) und Inkorporation (Verschlucken, Einatmen). Daher Heißlabor, Schutzkleidung & Aktivitätskontrollen.'
+  },
+  {
+    id: 'q-nuk-6',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Was versteht man unter dem in der modernen Nuklearmedizin etablierten Prinzip der „Theranostik“ (Therapie + Diagnostik)?',
+    options: [
+      'Dasselbe molekulare Zielmolekül wird einmal mit einem diagnostischen Strahler zur Lokalisation und einmal mit einem therapeutischen Strahler zur gezielten Zerstörung des Tumorgewebes markiert.',
+      'Die ausschließliche Kombination von Physiotherapie und Röntgentherapie.',
+      'Die Umwandlung von MRT-Bildern in Gamma-Strahlungsdosen.',
+      'Die Behandlung von gesunden Patienten zur reinen Vorsorge ohne Indikation.'
+    ],
+    correctIndex: 0,
+    explanation: 'Theranostik verbindet Therapie und Diagnostik: Ein tumorspezifischer Ligand wird z.B. mit Gallium-68 markiert, um im PET/CT den Tumor und Metastasen präzise aufzuspüren (Diagnose). Anschließend wird exakt derselbe Ligand mit einem Betastrahler (z.B. Lutetium-177) gekoppelt, um den Tumor von innen heraus gezielt zu bestrahlen und zu zerstören.',
+    mnemonic: 'Theranostik = Seeing what you treat, and treating what you see (Diagnose + Therapie auf molekularer Ebene).',
+    lawReference: 'Neumaier: S. 20, Abs. 1 & 2',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'schwer',
+    type: 'mc',
+    flashcardFront: 'Was bedeutet Theranostik in der Nuklearmedizin?',
+    flashcardBack: 'Kombination aus Diagnostik & Therapie: Ein spezifisches Trägermolekül wird mit einem diagnostischen Radionuklid (z.B. Ga-68) zur Bildgebung gekoppelt und bei Befund mit einem therapeutischen Nuklid (z.B. Lu-177) zur gezielten Gewebezerstörung eingesetzt.'
+  },
+  {
+    id: 'q-nuk-7',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Welche zwei bedeutenden klinischen Meilensteine moderner spezifischer Radiopharmaka werden im Einführungstext explizit genannt?',
+    options: [
+      'Radiopharmaka zur Behandlung des Prostatakarzinoms und zur Erkennung von Proteinablagerungen in der Demenzforschung.',
+      'Ausschließlich Röntgenkontrastmittel für die Herzkatheter-Untersuchung.',
+      'Die Entwicklung von Bleiwesten für Mammographie-Screenings.',
+      'Mittel zur Behandlung von Knochenbrüchen bei Jugendlichen.'
+    ],
+    correctIndex: 0,
+    explanation: 'Im Text (Neumaier S. 20) werden als herausragende Meilensteine der letzten Jahre genannt: Radiopharmaka für die Behandlung von Prostatakarzinomen (z.B. PSMA-Liganden) sowie zur Erkennung von Proteinablagerungen in der Demenzforschung (z.B. Amyloid-PET).',
+    mnemonic: 'Klinische Meilensteine: 1. Prostatakarzinom (PSMA-Therapie) & 2. Demenz (Amyloid-PET).',
+    lawReference: 'Neumaier: S. 20, Abs. 2',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'leicht',
+    type: 'mc',
+    flashcardFront: 'Welche klinischen Meilensteine der Radiopharmaka nennt Neumaier?',
+    flashcardBack: '1. Behandlung von Prostatakarzinomen (z.B. PSMA-Liganden in Diagnostik & Radioligandentherapie)\n2. Erkennung von Proteinablagerungen in der Demenzforschung (Amyloid-/Tau-PET).'
+  },
+  {
+    id: 'q-nuk-8',
+    deckId: 'deck-nuk-prinzipien',
+    question: 'Was geschieht mit der vom Patienten emittierten Gammastrahlung in der nuklearmedizinischen Bildgebung (Abb. 1.1)?',
+    options: [
+      'Sie wird von externen Detektoren erfasst und computergestützt rekonstruiert, um Ort, Stoffwechselaktivität und räumliche Ausdehnung des Zielgewebes nichtinvasiv zu bestimmen.',
+      'Sie wird durch eine externe Röntgenröhre wieder zurück in den Körper reflektiert.',
+      'Sie wird im Körper komplett absorbiert, sodass von außen nichts gemessen werden kann.',
+      'Sie wird ausschließlich im Urin gesammelt und erst im Labor gemessen.'
+    ],
+    correctIndex: 0,
+    explanation: 'Nach der Verteilung und selektiven Anreicherung des Radiotracers im Zielgewebe (z.B. Tumor) emittiert dieser Strahlung (z.B. Gammastrahlung). Externe Detektoren erfassen diese Strahlung, woraus rechnerisch die räumliche Ausdehnung und Stoffwechselaktivität rekonstruiert wird (Abb. 1.1).',
+    mnemonic: 'Emittierte Strahlung von innen → Externe Detektion → 2D/3D-Rekonstruktion des Stoffwechsels.',
+    lawReference: 'Neumaier: Abb. 1.1, S. 20',
+    pdfSource: 'Neumaier S. 20',
+    difficulty: 'leicht',
+    type: 'mc',
+    flashcardFront: 'Wie entsteht aus der emittierten Strahlung ein nuklearmedizinisches Bild?',
+    flashcardBack: 'Der angereicherte Radiotracer sendet Strahlung aus dem Körperinneren aus. Externe Detektoren (Gammakamera, SPECT-Köpfe, PET-Ring) erfassen die Photonen und rekonstruieren computergestützt die exakte Aktivitätsverteilung im Raum.'
   }
 ]
 

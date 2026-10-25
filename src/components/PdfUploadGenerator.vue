@@ -10,7 +10,12 @@ import {
   KeyRound,
   Trash2,
   Play,
-  Layers
+  Layers,
+  Image as ImageIcon,
+  Folder,
+  Plus,
+  Camera,
+  BookOpen
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
 import {
@@ -23,7 +28,16 @@ const emit = defineEmits<{
   (e: 'openDeck', deckId: string): void
 }>()
 
-const { aiSettings, customDecks, getDeckQuestions, addGeneratedDeck, deleteCustomDeck } = useStudyStore()
+const {
+  aiSettings,
+  folders,
+  addFolder,
+  customDecks,
+  getDeckQuestions,
+  addGeneratedDeck,
+  deleteCustomDeck,
+  moveDeckToFolder
+} = useStudyStore()
 
 const isDragging = ref(false)
 const isExtracting = ref(false)
@@ -37,7 +51,23 @@ const extractedFileName = ref<string>('')
 const extractedText = ref<string>('')
 const extractedPages = ref<ExtractedPage[]>([])
 const extractedPdfBase64 = ref<string | undefined>(undefined)
+const isImageSource = ref(false)
+const imagePreviewUrl = ref<string | null>(null)
+const extractedImageBase64 = ref<string | undefined>(undefined)
+const extractedImageMimeType = ref<string>('image/jpeg')
 const totalPages = ref<number>(0)
+
+const selectedFolderId = ref<string>('nuklearmedizin')
+const showNewFolderInput = ref(false)
+const newFolderName = ref('')
+
+function handleCreateNewFolder() {
+  if (!newFolderName.value.trim()) return
+  const created = addFolder({ name: newFolderName.value.trim() })
+  selectedFolderId.value = created.id
+  newFolderName.value = ''
+  showNewFolderInput.value = false
+}
 
 // Seitenbereich-Auswahl & Smart-Chunking für große PDFs (z.B. 45 Seiten)
 const pageFrom = ref<number>(1)
@@ -104,6 +134,32 @@ async function processPdfFile(file: File) {
   extractedPages.value = []
 
   try {
+    // Foto / Buchseiten-Check (jpg, png, webp, heic etc.)
+    if (file.type.startsWith('image/') || file.name.match(/\.(jpe?g|png|webp|heic|gif)$/i)) {
+      const base64 = await fileToBase64(file)
+      extractedImageBase64.value = base64
+      extractedImageMimeType.value = file.type || 'image/jpeg'
+      if (imagePreviewUrl.value) URL.revokeObjectURL(imagePreviewUrl.value)
+      imagePreviewUrl.value = URL.createObjectURL(file)
+      isImageSource.value = true
+      extractedPdfBase64.value = undefined
+      extractedPages.value = []
+      totalPages.value = 1
+      pageFrom.value = 1
+      pageTo.value = 1
+      useDeepChunking.value = false
+      extractedText.value = `[Foto/Buchseite hochgeladen: ${file.name}]`
+      return
+    }
+
+    // PDF / Textdatei:
+    isImageSource.value = false
+    if (imagePreviewUrl.value) {
+      URL.revokeObjectURL(imagePreviewUrl.value)
+      imagePreviewUrl.value = null
+    }
+    extractedImageBase64.value = undefined
+
     if (isLocalDev) {
       const formData = new FormData()
       formData.append('file', file)
@@ -147,7 +203,7 @@ async function processPdfFile(file: File) {
       useDeepChunking.value = false
     }
   } catch (err: any) {
-    errorMessage.value = err?.message || 'Fehler beim Extrahieren der PDF-Datei.'
+    errorMessage.value = err?.message || 'Fehler beim Extrahieren der Datei.'
   } finally {
     isExtracting.value = false
   }
@@ -182,6 +238,8 @@ async function runSingleAiCall(chunkText: string, chunkLabel: string, count: num
       body: JSON.stringify({
         text: chunkText,
         pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
+        imageBase64: isImageSource.value ? extractedImageBase64.value : undefined,
+        imageMimeType: extractedImageMimeType.value,
         fileName: chunkLabel,
         provider: aiSettings.value.provider,
         apiKey: getActiveApiKey(),
@@ -200,6 +258,8 @@ async function runSingleAiCall(chunkText: string, chunkLabel: string, count: num
   return await generateQuestionsInBrowser({
     text: chunkText,
     pdfBase64: includePdfBinary && aiSettings.value.provider === 'gemini' ? extractedPdfBase64.value : undefined,
+    imageBase64: isImageSource.value ? extractedImageBase64.value : undefined,
+    imageMimeType: extractedImageMimeType.value,
     fileName: chunkLabel,
     provider: aiSettings.value.provider,
     apiKey: getActiveApiKey(),
@@ -213,8 +273,8 @@ async function runSingleAiCall(chunkText: string, chunkLabel: string, count: num
 }
 
 async function generateQuestionsFromContent() {
-  if (!extractedText.value.trim() && !extractedPdfBase64.value) {
-    errorMessage.value = 'Bitte lade zuerst eine PDF hoch oder füge Lerntext in das Textfeld ein.'
+  if (!extractedText.value.trim() && !extractedPdfBase64.value && !extractedImageBase64.value) {
+    errorMessage.value = 'Bitte lade zuerst eine PDF oder ein Foto einer Buchseite hoch.'
     return
   }
 
@@ -290,6 +350,7 @@ async function generateQuestionsFromContent() {
         deckDescription:
           mainDescription ||
           `Tiefen-Analyse aus ${activePages.length} Seiten (${chunks.length} Abschnitte) mit insgesamt ${allCombinedQuestions.length} Fragen.`,
+        folderId: selectedFolderId.value,
         sourceFileName: `${extractedFileName.value} (S. ${pageFrom.value}–${pageTo.value})`,
         summaryPoints: allCombinedSummary.slice(0, 20),
         questions: allCombinedQuestions
@@ -300,12 +361,14 @@ async function generateQuestionsFromContent() {
     }
 
     // Fall B: Standard-Modus (einzelner Durchlauf)
-    batchProgressText.value = 'KI analysiert das Dokument und erstellt Prüfungsfragen...'
+    batchProgressText.value = isImageSource.value
+      ? 'KI analysiert Buchseite (Text, Diagramme & Schemata)...'
+      : 'KI analysiert das Dokument und erstellt Prüfungsfragen...'
     batchProgressPercent.value = 50
 
     const data = await runSingleAiCall(
       extractedText.value,
-      extractedFileName.value || 'Eigenes Skript',
+      extractedFileName.value || 'Lernmaterial',
       questionCount.value,
       totalPages.value <= 20
     )
@@ -315,9 +378,10 @@ async function generateQuestionsFromContent() {
     }
 
     const createdDeck = await addGeneratedDeck({
-      deckTitle: data.deckTitle || extractedFileName.value.replace(/\.pdf$/i, '') || 'Neues PDF-Lernset',
-      deckDescription: data.deckDescription || `Generiert aus ${extractedFileName.value || 'Text-Eingabe'}`,
-      sourceFileName: extractedFileName.value || 'Manuelle Eingabe',
+      deckTitle: data.deckTitle || extractedFileName.value.replace(/\.[^/.]+$/, '') || 'Neues Lernset',
+      deckDescription: data.deckDescription || `Generiert aus ${extractedFileName.value || 'Eingabe'}`,
+      folderId: selectedFolderId.value,
+      sourceFileName: extractedFileName.value || (isImageSource.value ? 'Buchfoto' : 'Manuelle Eingabe'),
       summaryPoints: Array.isArray(data.summaryPoints) ? data.summaryPoints : [],
       questions: data.questions
     })
@@ -439,30 +503,57 @@ async function generateQuestionsFromContent() {
         </div>
       </div>
 
-      <!-- PDF Dropzone -->
+      <!-- PDF & Photo Dropzone -->
       <label
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
-        class="block border-2 border-dashed rounded-3xl p-8 sm:p-10 text-center cursor-pointer transition-all"
+        class="block border-2 border-dashed rounded-3xl p-6 sm:p-10 text-center cursor-pointer transition-all"
         :class="
           isDragging
             ? 'border-amber-400 bg-amber-500/10'
             : 'border-slate-700 hover:border-amber-500/60 bg-slate-950/50'
         "
       >
-        <input type="file" accept="application/pdf,.txt,.md" class="hidden" @change="handleFileSelect" />
-        <div class="space-y-3">
+        <input type="file" accept="application/pdf,image/*,.txt,.md" class="hidden" @change="handleFileSelect" />
+        
+        <!-- Image Preview if photo is selected -->
+        <div v-if="isImageSource && imagePreviewUrl" class="space-y-4">
+          <div class="relative inline-block mx-auto max-w-xs rounded-2xl overflow-hidden border-2 border-amber-500/50 shadow-2xl bg-slate-900 group">
+            <img :src="imagePreviewUrl" alt="Buchseite Vorschau" class="max-h-64 w-auto mx-auto object-contain rounded-xl" />
+            <div class="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-bold text-white">
+              Antippen zum Wechseln
+            </div>
+            <span class="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-slate-950/90 text-xs text-amber-300 font-bold backdrop-blur border border-amber-500/40 flex items-center gap-1.5">
+              <Camera class="w-3.5 h-3.5" />
+              Buchfoto
+            </span>
+          </div>
+          <div>
+            <div class="text-base font-bold text-white flex items-center justify-center gap-2">
+              <ImageIcon class="w-4 h-4 text-amber-400" />
+              <span>{{ extractedFileName }}</span>
+            </div>
+            <div class="text-xs text-emerald-400 mt-1 font-semibold flex items-center justify-center gap-1">
+              <CheckCircle2 class="w-3.5 h-3.5" />
+              Bereit: KI analysiert Text, Schemata, Beschriftungen & Diagramme direkt aus dem Bild!
+            </div>
+          </div>
+          <p class="text-xs text-slate-400">Neues Foto oder PDF antippen / hierher ziehen zum Ersetzen</p>
+        </div>
+
+        <!-- Default PDF / File Upload State -->
+        <div v-else class="space-y-3">
           <div class="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto">
             <Loader2 v-if="isExtracting" class="w-7 h-7 text-amber-400 animate-spin" />
             <Upload v-else class="w-7 h-7 text-amber-400" />
           </div>
           <div>
             <div class="text-base font-bold text-white">
-              {{ isExtracting ? 'PDF wird gelesen und analysiert...' : 'PDF-Skript hierher ziehen oder antippen zum Auswählen' }}
+              {{ isExtracting ? 'Datei wird analysiert...' : 'PDF-Skript oder Foto einer Buchseite hierher ziehen' }}
             </div>
             <div class="text-xs text-slate-400 mt-1">
-              Egal ob 5 Seiten oder 60 Seiten – alle Seiten werden direkt ausgelesen
+              Antippen zum Auswählen: Unterstützt PDFs (auch 45+ Seiten) UND Smartphone-Fotos von Lehrbüchern!
             </div>
           </div>
           <div v-if="extractedFileName" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
@@ -529,11 +620,11 @@ async function generateQuestionsFromContent() {
         </label>
       </div>
 
-      <!-- Extracted Text Preview / Direct Paste Area -->
-      <div class="space-y-3">
+      <!-- Extracted Text Preview / Direct Paste Area (optional, collapsed on image) -->
+      <div v-if="!isImageSource || extractedText.length > 50" class="space-y-3">
         <div class="flex items-center justify-between">
           <label class="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Extrahierter PDF-Text / Oder eigenen Lerntext direkt einfügen:
+            Extrahierter Text / Oder eigenen Lerntext direkt einfügen:
           </label>
           <span v-if="extractedText" class="text-xs text-slate-500">
             {{ extractedText.length.toLocaleString('de-DE') }} Zeichen ({{ selectedPageCount || 1 }} Seiten)
@@ -541,14 +632,59 @@ async function generateQuestionsFromContent() {
         </div>
         <textarea
           v-model="extractedText"
-          rows="6"
+          rows="5"
           placeholder="Nach dem PDF-Upload erscheint hier der gesamte erkannte Text (du kannst hier auch direkt beliebige Abschnitte aus Word/PDF reinkopieren)..."
           class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono leading-relaxed"
         />
       </div>
 
-      <!-- Generation Options -->
+      <!-- Generation Options (including Folder Selection) -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+        <!-- Target Folder Selector -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <Folder class="w-3.5 h-3.5 text-amber-400" />
+              Ziel-Themenordner:
+            </span>
+            <button
+              type="button"
+              @click="showNewFolderInput = !showNewFolderInput"
+              class="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5"
+            >
+              <Plus class="w-3 h-3" />
+              {{ showNewFolderInput ? 'Abbrechen' : 'Neuer Ordner' }}
+            </button>
+          </label>
+
+          <div v-if="showNewFolderInput" class="flex gap-2">
+            <input
+              v-model="newFolderName"
+              type="text"
+              placeholder="z.B. Nuklearmedizin..."
+              class="flex-1 bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              @keyup.enter="handleCreateNewFolder"
+            />
+            <button
+              type="button"
+              @click="handleCreateNewFolder"
+              class="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
+            >
+              OK
+            </button>
+          </div>
+
+          <select
+            v-else
+            v-model="selectedFolderId"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+          >
+            <option v-for="folder in folders" :key="folder.id" :value="folder.id">
+              {{ folder.name }}
+            </option>
+          </select>
+        </div>
+
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-slate-300">
             {{ estimatedChunks > 1 ? `Fragen pro ${pagesPerChunk}-Seiten-Block` : 'Anzahl zu generierender Fragen' }}
@@ -557,18 +693,19 @@ async function generateQuestionsFromContent() {
             v-model.number="questionCount"
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
           >
-            <option :value="10">10 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${10 * estimatedChunks})` : '' }}</option>
-            <option :value="15">15 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${15 * estimatedChunks})` : '(Empfohlen)' }}</option>
-            <option :value="20">20 Fragen {{ estimatedChunks > 1 ? `(Gesamt ~${20 * estimatedChunks})` : '' }}</option>
+            <option :value="8">8 Fragen (Kompakt)</option>
+            <option :value="12">12 Fragen</option>
+            <option :value="15">15 Fragen (Empfohlen)</option>
+            <option :value="20">20 Fragen</option>
           </select>
         </div>
 
-        <div class="space-y-1.5 sm:col-span-2">
-          <label class="text-xs font-semibold text-slate-300">Optionaler Schwerpunkt / Wunsch an die KI</label>
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-300">Optionaler KI-Fokus</label>
           <input
             v-model="focusAreas"
             type="text"
-            placeholder="z.B. Fokus auf Grenzwerte, Fristen, Rechenaufgaben und Fallbeispiele fürs Examen..."
+            placeholder="z.B. Schemata, Grenzwerte, Fallbeispiele..."
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
           />
         </div>
@@ -631,24 +768,38 @@ async function generateQuestionsFromContent() {
       </div>
     </div>
 
-    <!-- Custom Generated Decks List -->
+    <!-- Custom Generated Decks List with Folder Tag -->
     <div v-if="customDecks.length > 0" class="space-y-4">
-      <h3 class="text-base font-bold text-white">Deine selbst generierten PDF-Decks ({{ customDecks.length }})</h3>
+      <h3 class="text-base font-bold text-white">Deine selbst generierten PDF- & Foto-Decks ({{ customDecks.length }})</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div
           v-for="deck in customDecks"
           :key="deck.id"
           class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-start justify-between gap-4"
         >
-          <div class="space-y-1.5">
-            <div class="flex items-center gap-2">
+          <div class="space-y-2 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300">
                 {{ getDeckQuestions(deck.id).length }} Fragen
               </span>
+              <!-- Folder Badge with quick move dropdown -->
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-amber-300 border border-slate-700">
+                <Folder class="w-3 h-3 text-amber-400" />
+                <select
+                  :value="deck.folderId || 'custom'"
+                  @change="(e) => moveDeckToFolder(deck.id, (e.target as HTMLSelectElement).value)"
+                  class="bg-transparent text-amber-300 text-xs focus:outline-none cursor-pointer"
+                  title="In anderen Ordner verschieben"
+                >
+                  <option v-for="f in folders" :key="f.id" :value="f.id" class="bg-slate-900 text-white">
+                    {{ f.name }}
+                  </option>
+                </select>
+              </span>
               <span class="text-xs text-slate-500">{{ deck.createdAt }}</span>
             </div>
-            <h4 class="font-bold text-white text-base">{{ deck.title }}</h4>
-            <p class="text-xs text-slate-400">{{ deck.description }}</p>
+            <h4 class="font-bold text-white text-base leading-snug">{{ deck.title }}</h4>
+            <p class="text-xs text-slate-400 line-clamp-2">{{ deck.description }}</p>
           </div>
 
           <div class="flex items-center gap-2 shrink-0">

@@ -1,7 +1,8 @@
 import { ref, computed, watch } from 'vue'
-import { INITIAL_DECKS, INITIAL_QUESTIONS } from '../data/initialData'
+import { INITIAL_DECKS, INITIAL_QUESTIONS, DEFAULT_FOLDERS } from '../data/initialData'
 import type {
   StudyDeck,
+  StudyFolder,
   Question,
   QuestionProgress,
   AISettings,
@@ -20,6 +21,7 @@ import {
 const STORAGE_KEYS = {
   CUSTOM_DECKS: 'radlearn_custom_decks_v1',
   CUSTOM_QUESTIONS: 'radlearn_custom_questions_v1',
+  FOLDERS: 'radlearn_folders_v1',
   PROGRESS: 'radlearn_progress_v1',
   PROFILE: 'radlearn_user_profile_v2', // v2 = Strengeres Punkte- & Preis-Balancing!
   AI_SETTINGS: 'radlearn_ai_settings_v1',
@@ -148,6 +150,12 @@ function recalculateFairXp(
 
 const envMeta = (import.meta as any).env || {}
 
+const rawLoadedFolders = loadJson<StudyFolder[]>(STORAGE_KEYS.FOLDERS, DEFAULT_FOLDERS)
+const mergedFoldersMap = new Map<string, StudyFolder>()
+for (const df of DEFAULT_FOLDERS) mergedFoldersMap.set(df.id, df)
+for (const f of rawLoadedFolders) mergedFoldersMap.set(f.id, f)
+const folders = ref<StudyFolder[]>(Array.from(mergedFoldersMap.values()))
+
 const customDecks = ref<StudyDeck[]>(loadJson(STORAGE_KEYS.CUSTOM_DECKS, []))
 const customQuestions = ref<Question[]>(loadJson(STORAGE_KEYS.CUSTOM_QUESTIONS, []))
 const progressMap = ref<Record<string, QuestionProgress>>(loadJson(STORAGE_KEYS.PROGRESS, {}))
@@ -209,6 +217,7 @@ let xpGainTimer: ReturnType<typeof setTimeout> | null = null
 let hasInitialSyncRun = false
 let progressSyncTimer: ReturnType<typeof setTimeout> | null = null
 
+watch(folders, (val) => localStorage.setItem(STORAGE_KEYS.FOLDERS, JSON.stringify(val)), { deep: true })
 watch(customDecks, (val) => localStorage.setItem(STORAGE_KEYS.CUSTOM_DECKS, JSON.stringify(val)), { deep: true })
 watch(customQuestions, (val) => localStorage.setItem(STORAGE_KEYS.CUSTOM_QUESTIONS, JSON.stringify(val)), { deep: true })
 watch(progressMap, (val) => localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(val)), { deep: true })
@@ -431,6 +440,12 @@ export function useStudyStore() {
 
   function getDeckQuestions(deckId: string): Question[] {
     if (deckId === 'all') return allQuestions.value
+    if (deckId.startsWith('folder:')) {
+      const targetFolderId = deckId.replace('folder:', '')
+      const decksInFolder = allDecks.value.filter((d) => (d.folderId || 'custom') === targetFolderId)
+      const deckIds = new Set(decksInFolder.map((d) => d.id))
+      return allQuestions.value.filter((q) => deckIds.has(q.deckId))
+    }
     if (deckId === 'wrong') {
       return allQuestions.value.filter((q) => {
         const p = progressMap.value[q.id]
@@ -595,9 +610,75 @@ export function useStudyStore() {
     scheduleProgressPush()
   }
 
+  function addFolder(payload: { name: string; icon?: string; color?: string; description?: string }) {
+    const newFolder: StudyFolder = {
+      id: `folder-custom-${Date.now()}`,
+      name: payload.name.trim(),
+      icon: payload.icon || 'Folder',
+      color: payload.color || 'blue',
+      description: payload.description || '',
+      isBuiltIn: false
+    }
+    folders.value.push(newFolder)
+    return newFolder
+  }
+
+  function deleteFolder(folderId: string) {
+    const f = folders.value.find((item) => item.id === folderId)
+    if (f?.isBuiltIn) return
+    for (const d of customDecks.value) {
+      if (d.folderId === folderId) {
+        d.folderId = 'custom'
+      }
+    }
+    folders.value = folders.value.filter((item) => item.id !== folderId)
+  }
+
+  function moveDeckToFolder(deckId: string, targetFolderId: string) {
+    const cd = customDecks.value.find((d) => d.id === deckId)
+    if (cd) {
+      cd.folderId = targetFolderId
+      if (isCloudConfigured.value) {
+        upsertCloudDeck(
+          supabaseConfig.value,
+          cd,
+          customQuestions.value.filter((q) => q.deckId === deckId)
+        ).catch(console.error)
+      }
+    }
+  }
+
+  function getFolderStats(folderId: string) {
+    const decksInFolder = allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
+    const deckIds = new Set(decksInFolder.map((d) => d.id))
+    const qs = allQuestions.value.filter((q) => deckIds.has(q.deckId))
+    const total = qs.length
+    let answered = 0
+    let mastered = 0
+    let wrong = 0
+
+    for (const q of qs) {
+      const p = progressMap.value[q.id]
+      if (!p) continue
+      if (p.attempts > 0) answered++
+      if (p.box >= 3 && p.lastCorrect) mastered++
+      if (p.lastCorrect === false) wrong++
+    }
+
+    return {
+      deckCount: decksInFolder.length,
+      total,
+      answered,
+      mastered,
+      wrong,
+      percent: total > 0 ? Math.round((mastered / total) * 100) : 0
+    }
+  }
+
   async function addGeneratedDeck(payload: {
     deckTitle: string
     deckDescription: string
+    folderId?: string
     sourceFileName?: string
     summaryPoints?: string[]
     questions: Array<Omit<Question, 'id' | 'deckId'>>
@@ -608,6 +689,7 @@ export function useStudyStore() {
 
     const newDeck: StudyDeck = {
       id: deckId,
+      folderId: payload.folderId || 'custom',
       title: payload.deckTitle || `PDF-Lernset (${new Date().toLocaleDateString('de-DE')})`,
       description: payload.deckDescription || 'Automatisch aus deinem hochgeladenen Dokument generierte Prüfungsfragen.',
       icon: 'FileText',
@@ -820,6 +902,11 @@ export function useStudyStore() {
   return {
     allDecks,
     allQuestions,
+    folders,
+    addFolder,
+    deleteFolder,
+    moveDeckToFolder,
+    getFolderStats,
     customDecks,
     customQuestions,
     progressMap,
