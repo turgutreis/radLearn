@@ -2,24 +2,15 @@
 import { ref, computed } from 'vue'
 import {
   Upload,
-  FileText,
   Sparkles,
   Loader2,
   CheckCircle2,
   AlertCircle,
   KeyRound,
-  Trash2,
-  Play,
   Layers,
-  Image as ImageIcon,
   Folder,
   Plus,
-  Camera,
-  ChevronUp,
-  ChevronDown,
-  Check,
-  X,
-  FileStack
+  Camera
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
 import {
@@ -27,21 +18,9 @@ import {
   generateQuestionsInBrowser,
   type ExtractedPage
 } from '../services/pdfAndAiClient'
-
-const emit = defineEmits<{
-  (e: 'openDeck', deckId: string): void
-}>()
-
-const {
-  aiSettings,
-  folders,
-  addFolder,
-  customDecks,
-  getDeckQuestions,
-  addGeneratedDeck,
-  deleteCustomDeck,
-  moveDeckToFolder
-} = useStudyStore()
+import AiConfigPanel from './AiConfigPanel.vue'
+import BatchQueueList from './BatchQueueList.vue'
+import CustomDecksList from './CustomDecksList.vue'
 
 export interface QueueItem {
   id: string
@@ -59,6 +38,21 @@ export interface QueueItem {
   error?: string
   generatedQuestionsCount?: number
 }
+
+const emit = defineEmits<{
+  (e: 'openDeck', deckId: string): void
+}>()
+
+const {
+  aiSettings,
+  folders,
+  addFolder,
+  customDecks,
+  getDeckQuestions,
+  addGeneratedDeck,
+  deleteCustomDeck,
+  moveDeckToFolder
+} = useStudyStore()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadQueue = ref<QueueItem[]>([])
@@ -135,12 +129,6 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 async function extractItemData(item: QueueItem) {
   try {
     if (item.type === 'image') {
@@ -201,13 +189,11 @@ async function handleIncomingFiles(fileList: FileList | File[]) {
     }
 
     uploadQueue.value.push(item)
-    // Run extraction in background
     extractItemData(item)
   }
 
   isExtracting.value = false
 
-  // Auto-suggest deck title if empty
   if (!batchDeckTitle.value.trim() && uploadQueue.value.length > 0) {
     const firstCleanName = uploadQueue.value[0].name.replace(/\.[^/.]+$/, '')
     if (uploadQueue.value.length > 1) {
@@ -223,7 +209,6 @@ async function handleFileSelect(event: Event) {
   if (input.files?.length) {
     await handleIncomingFiles(input.files)
   }
-  // reset input so the same files can be re-selected if desired
   input.value = ''
 }
 
@@ -363,7 +348,6 @@ async function startBatchProcessing() {
     return
   }
 
-  // Check if any queue item is still extracting
   if (uploadQueue.value.some((it) => it.status === 'extracting')) {
     errorMessage.value = 'Bitte warte einen Moment, bis alle Dateien eingelesen sind.'
     return
@@ -408,7 +392,7 @@ async function startBatchProcessing() {
     return
   }
 
-  // Fall B: Genau 1 PDF mit aktiviertem Tiefen-Modus (Seiten-Chunking)
+  // Fall B: Genau 1 PDF mit aktiviertem Tiefen-Modus
   if (
     singlePdfItem.value &&
     useDeepChunking.value &&
@@ -501,7 +485,7 @@ async function startBatchProcessing() {
     return
   }
 
-  // Fall C: Multi-File Batch Queue (Schritt-für-Schritt Verarbeitung)
+  // Fall C: Multi-File Batch Queue
   const itemsToProcess = uploadQueue.value.filter((it) => it.status !== 'done')
   const totalCount = itemsToProcess.length
   if (totalCount === 0) {
@@ -582,7 +566,6 @@ async function startBatchProcessing() {
 
     batchProgressPercent.value = Math.round(((i + 1) / totalCount) * 100)
 
-    // Schutz vor Google Gemini 503/429 Überlastung: 1.2s Pause zwischen Requests
     if (i < totalCount - 1) {
       batchProgressText.value = `Kurze Pause vor nächster Datei (Schutz vor Server-Überlastung)...`
       await new Promise((r) => setTimeout(r, 1200))
@@ -641,84 +624,12 @@ async function startBatchProcessing() {
         </button>
       </div>
 
-      <!-- Collapsible AI Settings Panel -->
-      <div v-if="showApiConfig" class="bg-slate-950/90 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div class="flex flex-wrap items-center gap-2">
-          <button
-            v-for="p in (['gemini', 'openai', 'anthropic', 'ollama'] as const)"
-            :key="p"
-            type="button"
-            @click="updateProviderModel(p)"
-            class="px-3.5 py-2 rounded-xl text-xs font-bold border transition"
-            :class="
-              aiSettings.provider === p
-                ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-            "
-          >
-            {{
-              p === 'gemini'
-                ? 'Google Gemini (Empfohlen für Fotos & PDFs)'
-                : p === 'openai'
-                  ? 'OpenAI (GPT-4o)'
-                  : p === 'anthropic'
-                    ? 'Anthropic Claude'
-                    : 'Lokal: Ollama (Kostenlos/Offline)'
-            }}
-          </button>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div v-if="aiSettings.provider === 'gemini'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Google Gemini API-Key (oder in Netlify als VITE_GEMINI_API_KEY)</label>
-            <input
-              v-model="aiSettings.geminiKey"
-              type="password"
-              placeholder="AIzaSy..."
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div v-if="aiSettings.provider === 'openai'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">OpenAI API-Key (oder in Netlify als VITE_OPENAI_API_KEY)</label>
-            <input
-              v-model="aiSettings.openaiKey"
-              type="password"
-              placeholder="sk-..."
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div v-if="aiSettings.provider === 'anthropic'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Anthropic API-Key</label>
-            <input
-              v-model="aiSettings.anthropicKey"
-              type="password"
-              placeholder="sk-ant-..."
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div v-if="aiSettings.provider === 'ollama'" class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Lokale Ollama URL</label>
-            <input
-              v-model="aiSettings.ollamaUrl"
-              type="text"
-              placeholder="http://localhost:11434"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div class="space-y-1.5">
-            <label class="text-xs font-semibold text-slate-300">Modell-Name</label>
-            <input
-              v-model="aiSettings.model"
-              type="text"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-      </div>
+      <!-- Collapsible AI Settings Panel Component -->
+      <AiConfigPanel
+        :is-open="showApiConfig"
+        :ai-settings="aiSettings"
+        @update-provider="updateProviderModel"
+      />
 
       <!-- Hidden Multi-File Input -->
       <input
@@ -768,189 +679,18 @@ async function startBatchProcessing() {
         </div>
       </label>
 
-      <!-- Multi-File Batch Queue List -->
-      <div v-if="uploadQueue.length > 0" class="space-y-3 bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-5">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-          <div class="flex items-center gap-2">
-            <FileStack class="w-5 h-5 text-amber-400 shrink-0" />
-            <span class="text-sm font-bold text-white">
-              Warteschlange ({{ uploadQueue.length }} {{ uploadQueue.length === 1 ? 'Datei' : 'Dateien / Seiten' }})
-            </span>
-            <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">
-              ≈ {{ totalReadyQuestionsEstimate }} Fragen
-            </span>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              @click="fileInputRef?.click()"
-              class="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-500/50 transition font-medium"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              <span>+ Mehr hinzufügen</span>
-            </button>
-            <button
-              type="button"
-              @click="clearQueue"
-              class="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700 transition"
-            >
-              <Trash2 class="w-3.5 h-3.5" />
-              <span>Leeren</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Queue Cards List -->
-        <div class="space-y-2">
-          <div
-            v-for="(item, idx) in uploadQueue"
-            :key="item.id"
-            class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/90 border transition"
-            :class="
-              item.status === 'processing'
-                ? 'border-amber-500 shadow-md shadow-amber-500/10'
-                : item.status === 'done'
-                  ? 'border-emerald-500/40 bg-emerald-950/10'
-                  : item.status === 'error'
-                    ? 'border-rose-500/50 bg-rose-950/10'
-                    : 'border-slate-800'
-            "
-          >
-            <!-- Order Number Badge -->
-            <span class="w-6 h-6 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">
-              {{ idx + 1 }}
-            </span>
-
-            <!-- Image Thumbnail or Document Icon -->
-            <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
-              <img
-                v-if="item.previewUrl"
-                :src="item.previewUrl"
-                :alt="item.name"
-                class="w-full h-full object-cover"
-              />
-              <FileText v-else-if="item.type === 'pdf'" class="w-6 h-6 text-rose-400" />
-              <FileText v-else class="w-6 h-6 text-amber-400" />
-            </div>
-
-            <!-- Title & Status -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <p class="text-xs sm:text-sm font-semibold text-white truncate" :title="item.name">
-                  {{ item.name }}
-                </p>
-                <span v-if="item.type === 'pdf' && item.totalPages" class="text-[10px] text-slate-400 shrink-0">
-                  ({{ item.totalPages }} S.)
-                </span>
-              </div>
-
-              <div class="flex flex-wrap items-center gap-2 mt-1">
-                <span
-                  v-if="item.status === 'extracting'"
-                  class="text-[10px] text-amber-400 flex items-center gap-1 font-medium"
-                >
-                  <Loader2 class="w-3 h-3 animate-spin" />
-                  Wird eingelesen...
-                </span>
-                <span
-                  v-else-if="item.status === 'processing'"
-                  class="text-[10px] text-amber-300 flex items-center gap-1 font-bold animate-pulse"
-                >
-                  <Loader2 class="w-3 h-3 animate-spin" />
-                  KI analysiert Seite...
-                </span>
-                <span
-                  v-else-if="item.status === 'done'"
-                  class="text-[10px] text-emerald-400 flex items-center gap-1 font-bold"
-                >
-                  <CheckCircle2 class="w-3 h-3" />
-                  {{ item.generatedQuestionsCount }} Fragen erstellt
-                </span>
-                <span
-                  v-else-if="item.status === 'error'"
-                  class="text-[10px] text-rose-400 flex items-center gap-1 font-medium truncate"
-                  :title="item.error"
-                >
-                  <AlertCircle class="w-3 h-3 shrink-0" />
-                  {{ item.error || 'Fehler' }}
-                </span>
-                <span
-                  v-else
-                  class="text-[10px] text-slate-400 flex items-center gap-1"
-                >
-                  <Check class="w-3 h-3 text-emerald-400" />
-                  Bereit
-                </span>
-
-                <span class="text-[10px] text-slate-500">
-                  {{ formatFileSize(item.size) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Reorder & Delete Buttons -->
-            <div class="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                :disabled="idx === 0 || isGenerating"
-                @click="moveQueueItem(idx, 'up')"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 transition"
-                title="Nach oben verschieben"
-              >
-                <ChevronUp class="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                :disabled="idx === uploadQueue.length - 1 || isGenerating"
-                @click="moveQueueItem(idx, 'down')"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 transition"
-                title="Nach unten verschieben"
-              >
-                <ChevronDown class="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                :disabled="isGenerating"
-                @click="removeQueueItem(item.id)"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-20 transition"
-                title="Entfernen"
-              >
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Merge Settings (if > 1 file) -->
-        <div v-if="uploadQueue.length > 1" class="pt-3 border-t border-slate-800/80 space-y-3">
-          <label class="flex items-start gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              v-model="mergeIntoSingleDeck"
-              class="accent-amber-500 rounded mt-0.5"
-            />
-            <div class="text-xs space-y-0.5">
-              <div class="font-bold text-amber-300">
-                Alle {{ uploadQueue.length }} Seiten zu EINEM gemeinsamen Lernset zusammenfassen (Empfohlen)
-              </div>
-              <div class="text-slate-400">
-                Optimal für Buchkapitel: Erstellt ein zusammenhängendes Prüfungsdeck mit insgesamt ca.
-                <strong class="text-white">{{ totalReadyQuestionsEstimate }} Fragen</strong>, sortiert nach den Buchseiten.
-              </div>
-            </div>
-          </label>
-
-          <div v-if="mergeIntoSingleDeck" class="space-y-1">
-            <label class="text-xs font-semibold text-slate-300">Name des gemeinsamen Decks:</label>
-            <input
-              v-model="batchDeckTitle"
-              type="text"
-              placeholder="z.B. Prinzipien der Nuklearmedizin (5 Seiten)..."
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-      </div>
+      <!-- Multi-File Batch Queue Component -->
+      <BatchQueueList
+        :queue="uploadQueue"
+        :total-estimate="totalReadyQuestionsEstimate"
+        :is-generating="isGenerating"
+        v-model:merge-into-single-deck="mergeIntoSingleDeck"
+        v-model:batch-deck-title="batchDeckTitle"
+        @add-more="fileInputRef?.click()"
+        @clear="clearQueue"
+        @move-item="moveQueueItem"
+        @remove-item="removeQueueItem"
+      />
 
       <!-- Single Multi-Page PDF Deep Chunking Controls -->
       <div
@@ -1172,60 +912,14 @@ async function startBatchProcessing() {
       </div>
     </div>
 
-    <!-- Custom Generated Decks List with Folder Tag -->
-    <div v-if="customDecks.length > 0" class="space-y-4">
-      <h3 class="text-base font-bold text-white">Deine selbst generierten Decks ({{ customDecks.length }})</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div
-          v-for="deck in customDecks"
-          :key="deck.id"
-          class="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-start justify-between gap-4"
-        >
-          <div class="space-y-2 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300">
-                {{ getDeckQuestions(deck.id).length }} Fragen
-              </span>
-              <!-- Folder Badge with quick move dropdown -->
-              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-amber-300 border border-slate-700">
-                <Folder class="w-3 h-3 text-amber-400" />
-                <select
-                  :value="deck.folderId || 'custom'"
-                  @change="(e) => moveDeckToFolder(deck.id, (e.target as HTMLSelectElement).value)"
-                  class="bg-transparent text-amber-300 text-xs focus:outline-none cursor-pointer"
-                  title="In anderen Ordner verschieben"
-                >
-                  <option v-for="f in folders" :key="f.id" :value="f.id" class="bg-slate-900 text-white">
-                    {{ f.name }}
-                  </option>
-                </select>
-              </span>
-              <span class="text-xs text-slate-500">{{ deck.createdAt }}</span>
-            </div>
-            <h4 class="font-bold text-white text-base leading-snug">{{ deck.title }}</h4>
-            <p class="text-xs text-slate-400 line-clamp-2">{{ deck.description }}</p>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              @click="emit('openDeck', deck.id)"
-              class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition"
-            >
-              <Play class="w-3.5 h-3.5" />
-              Üben
-            </button>
-            <button
-              type="button"
-              @click="deleteCustomDeck(deck.id)"
-              class="p-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 transition"
-              title="Deck löschen"
-            >
-              <Trash2 class="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Custom Generated Decks List Component -->
+    <CustomDecksList
+      :custom-decks="customDecks"
+      :folders="folders"
+      :get-deck-questions="getDeckQuestions"
+      @open-deck="(id) => emit('openDeck', id)"
+      @delete-deck="deleteCustomDeck"
+      @move-deck="moveDeckToFolder"
+    />
   </div>
 </template>

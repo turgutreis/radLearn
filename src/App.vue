@@ -1,28 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import {
-  Radiation,
   LayoutDashboard,
   CheckSquare,
   Layers,
   Puzzle,
   BookOpen,
   UploadCloud,
-  Download,
-  Upload,
   RotateCcw,
   Play,
   Sparkles,
   AlertTriangle,
   Bookmark,
-  Cloud,
-  Check,
-  Copy,
-  X,
-  RefreshCw,
   Gift,
-  Flame,
-  Heart,
   Zap,
   Menu,
   ChevronRight,
@@ -33,17 +23,19 @@ import {
   Atom,
   Crosshair,
   Activity,
-  ArrowUpDown,
-  Plus
+  ArrowUpDown
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
-import { SUPABASE_SQL_SCHEMA } from './services/supabaseSync'
 import QuizMode from './components/QuizMode.vue'
 import FlashcardMode from './components/FlashcardMode.vue'
 import MatchingTrainer from './components/MatchingTrainer.vue'
 import CheatSheetView from './components/CheatSheetView.vue'
 import PdfUploadGenerator from './components/PdfUploadGenerator.vue'
 import ProfileRewardsView from './components/ProfileRewardsView.vue'
+import AppHeader from './components/AppHeader.vue'
+import NavigationDrawer from './components/NavigationDrawer.vue'
+import CloudSyncModal from './components/CloudSyncModal.vue'
+import MoveDeckModal from './components/MoveDeckModal.vue'
 
 type TabId = 'dashboard' | 'quiz' | 'flashcards' | 'matching' | 'cheatsheet' | 'rewards' | 'upload'
 
@@ -51,7 +43,6 @@ const activeTab = ref<TabId>('dashboard')
 const activeDeckId = ref<string>('all')
 const showCloudModal = ref<boolean>(false)
 const isMobileMenuOpen = ref<boolean>(false)
-const sqlCopied = ref<boolean>(false)
 
 const {
   allDecks,
@@ -81,20 +72,16 @@ const collapsedFolders = ref<Record<string, boolean>>({})
 
 const showMoveDeckModal = ref<boolean>(false)
 const deckToMove = ref<any>(null)
-const inlineNewFolderName = ref<string>('')
-const showInlineNewFolder = ref<boolean>(false)
 
 type SortMode = 'default' | 'az' | 'questions' | 'progress-low' | 'progress-high'
 const activeSortMode = ref<SortMode>('default')
 
 function openMoveModal(deck: any) {
   deckToMove.value = deck
-  showInlineNewFolder.value = false
-  inlineNewFolderName.value = ''
   showMoveDeckModal.value = true
 }
 
-function selectTargetFolder(folderId: string) {
+function handleSelectFolder(folderId: string) {
   if (deckToMove.value) {
     moveDeckToFolder(deckToMove.value.id, folderId)
   }
@@ -102,14 +89,11 @@ function selectTargetFolder(folderId: string) {
   deckToMove.value = null
 }
 
-function handleCreateFolderInModal() {
-  if (!inlineNewFolderName.value.trim()) return
-  const created = addFolder({ name: inlineNewFolderName.value.trim() })
+function handleCreateFolder(name: string) {
+  const created = addFolder({ name })
   if (deckToMove.value) {
     moveDeckToFolder(deckToMove.value.id, created.id)
   }
-  inlineNewFolderName.value = ''
-  showInlineNewFolder.value = false
   showMoveDeckModal.value = false
   deckToMove.value = null
 }
@@ -144,7 +128,7 @@ function getDecksForFolder(folderId: string) {
   return list
 }
 
-// Scroll-Lock für Drawer & Modal (inkl. iOS Safari, wo overflow:hidden allein nicht reicht)
+// Scroll-Lock für Drawer & Modal (inkl. iOS Safari)
 let lockedScrollY = 0
 let isScrollLocked = false
 
@@ -176,7 +160,6 @@ function unlockBodyScroll() {
   window.scrollTo(0, lockedScrollY)
 }
 
-// flush: 'sync', damit das Entsperren sofort passiert (bevor setTab nach oben scrollt)
 watch(
   () => isMobileMenuOpen.value || showCloudModal.value || showMoveDeckModal.value,
   (shouldLock) => (shouldLock ? lockBodyScroll() : unlockBodyScroll()),
@@ -204,18 +187,6 @@ function startQuizForDeck(deckId: string) {
 function startFlashcardsForDeck(deckId: string) {
   activeDeckId.value = deckId
   setTab('flashcards')
-}
-
-function copySqlSchema() {
-  navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA)
-  sqlCopied.value = true
-  setTimeout(() => {
-    sqlCopied.value = false
-  }, 2000)
-}
-
-async function saveAndTestCloudSync() {
-  await syncFromCloud()
 }
 
 function handleExportBackup() {
@@ -257,518 +228,142 @@ function confirmResetProgress() {
 
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
-    <!-- Floating XP Gain Toast -->
-    <div
-      v-if="lastXpGain"
-      class="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-50 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-extrabold text-xs sm:text-sm shadow-2xl flex items-center gap-2 animate-bounce"
-    >
-      <Sparkles class="w-4 h-4" />
-      <span>{{ lastXpGain.label }}</span>
+    <!-- Header Component -->
+    <AppHeader
+      :active-tab="activeTab"
+      :user-profile="userProfile"
+      :level-info="levelInfo"
+      :available-coins="availableCoins"
+      :last-xp-gain="lastXpGain"
+      :cloud-sync-status="cloudSyncStatus"
+      :is-cloud-configured="isCloudConfigured"
+      @select-tab="(t) => setTab(t as TabId)"
+      @open-cloud="showCloudModal = true"
+      @open-mobile-menu="isMobileMenuOpen = true"
+    />
+
+    <!-- Desktop Sub-Navigation Bar (lg only) -->
+    <div class="hidden lg:block max-w-7xl mx-auto px-4 sm:px-6 pb-3 pt-3 w-full">
+      <nav class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          @click="setTab('dashboard')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
+        >
+          <LayoutDashboard class="w-4 h-4 shrink-0" />
+          <span>Übersicht</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('quiz')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
+        >
+          <CheckSquare class="w-4 h-4 shrink-0" />
+          <span>MC-Quiz & Prüfung</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('flashcards')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
+        >
+          <Layers class="w-4 h-4 shrink-0" />
+          <span>Karteikarten</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('matching')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
+        >
+          <Puzzle class="w-4 h-4 shrink-0" />
+          <span>Zahlen & Fristen</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('cheatsheet')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
+        >
+          <BookOpen class="w-4 h-4 shrink-0" />
+          <span>Spickzettel</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('rewards')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
+          :class="
+            activeTab === 'rewards'
+              ? 'bg-rose-500 text-white font-bold shadow'
+              : 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/30'
+          "
+        >
+          <Gift class="w-4 h-4 shrink-0" />
+          <span>Belohnungen 🍣</span>
+        </button>
+
+        <button
+          type="button"
+          @click="setTab('upload')"
+          class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap ml-auto"
+          :class="
+            activeTab === 'upload'
+              ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-bold shadow'
+              : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/40'
+          "
+        >
+          <UploadCloud class="w-4 h-4 shrink-0" />
+          <span>PDF-Upload & KI</span>
+        </button>
+      </nav>
     </div>
 
-    <!-- Top Header -->
-    <header class="sticky top-0 z-30 backdrop-blur-xl bg-slate-950/90 border-b border-slate-800/80">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
-        <!-- Brand -->
-        <div class="flex items-center gap-2.5 sm:gap-3 cursor-pointer shrink-0" @click="setTab('dashboard')">
-          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20">
-            <Radiation class="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div>
-            <div class="flex items-center gap-1.5 sm:gap-2">
-              <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">RadLearn</h1>
-              <span class="px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                MTR
-              </span>
-            </div>
-            <p class="text-[11px] text-slate-400 hidden sm:block">
-              Hallo {{ userProfile.name }}! {{ levelInfo.current.badge }} {{ levelInfo.current.title }} (Level {{ levelInfo.current.level }})
-            </p>
-          </div>
-        </div>
+    <!-- Mobile Navigation Drawer Component -->
+    <NavigationDrawer
+      :is-open="isMobileMenuOpen"
+      :active-tab="activeTab"
+      :user-profile="userProfile"
+      :level-info="levelInfo"
+      :available-coins="availableCoins"
+      :overall-stats="overallStats"
+      @close="isMobileMenuOpen = false"
+      @select-tab="(t) => setTab(t as TabId)"
+      @open-cloud="showCloudModal = true"
+      @export-backup="handleExportBackup"
+      @import-backup="handleImportBackup"
+      @reset-progress="confirmResetProgress"
+    />
 
-        <!-- Header Actions: Coins, Cloud Status, Desktop Backups & Mobile Hamburger -->
-        <div class="flex items-center gap-1.5 sm:gap-2">
-          <!-- Profile / Coins / Streak Pill -->
-          <button
-            type="button"
-            @click="setTab('rewards')"
-            class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition"
-            title="Zu deinem Profil & Belohnungs-Shop"
-          >
-            <span class="flex items-center gap-1 text-amber-400">
-              <Flame class="w-3.5 h-3.5 fill-amber-400" />
-              <span>{{ userProfile.streakDays }}d</span>
-            </span>
-            <span class="text-slate-700">|</span>
-            <span class="flex items-center gap-1 text-rose-300">
-              <Heart class="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
-              <span>{{ availableCoins }}</span>
-              <span class="hidden sm:inline">Pkt.</span>
-            </span>
-          </button>
+    <!-- Cloud Sync Modal Component -->
+    <CloudSyncModal
+      :is-open="showCloudModal"
+      :supabase-config="supabaseConfig"
+      :is-cloud-configured="isCloudConfigured"
+      :cloud-sync-status="cloudSyncStatus"
+      :cloud-sync-error="cloudSyncError"
+      @close="showCloudModal = false"
+      @sync="syncFromCloud"
+    />
 
-          <!-- Cloud Sync Status Button -->
-          <button
-            type="button"
-            @click="showCloudModal = true"
-            class="p-2 sm:px-3 sm:py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition"
-            :class="[
-              cloudSyncStatus === 'synced'
-                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
-                : cloudSyncStatus === 'syncing'
-                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                  : cloudSyncStatus === 'error'
-                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-300'
-                    : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
-            ]"
-            title="Supabase Cloud-Sync konfigurieren"
-          >
-            <RefreshCw v-if="cloudSyncStatus === 'syncing'" class="w-3.5 h-3.5 animate-spin text-cyan-400" />
-            <Cloud v-else class="w-3.5 h-3.5" :class="cloudSyncStatus === 'synced' ? 'text-emerald-400' : 'text-amber-400'" />
-            <span class="hidden md:inline">
-              {{
-                cloudSyncStatus === 'synced'
-                  ? 'Cloud aktiv'
-                  : cloudSyncStatus === 'syncing'
-                    ? 'Sync...'
-                    : cloudSyncStatus === 'error'
-                      ? 'Fehler'
-                      : 'Cloud'
-              }}
-            </span>
-          </button>
+    <!-- Move Deck Modal Component -->
+    <MoveDeckModal
+      :is-open="showMoveDeckModal"
+      :deck="deckToMove"
+      :folders="folders"
+      :get-folder-stats="getFolderStats"
+      @close="showMoveDeckModal = false"
+      @select-folder="handleSelectFolder"
+      @create-folder="handleCreateFolder"
+    />
 
-          <!-- Desktop Backup Buttons (hidden on mobile, inside drawer instead) -->
-          <button
-            type="button"
-            @click="handleExportBackup"
-            class="hidden lg:flex p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium items-center gap-1 transition"
-            title="Lernfortschritt & Decks als JSON sichern"
-          >
-            <Download class="w-3.5 h-3.5 text-amber-400" />
-          </button>
-
-          <label
-            class="hidden lg:flex p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium items-center gap-1 cursor-pointer transition"
-            title="JSON-Backup wiederherstellen"
-          >
-            <Upload class="w-3.5 h-3.5 text-cyan-400" />
-            <input type="file" accept="application/json" class="hidden" @change="handleImportBackup" />
-          </label>
-
-          <!-- Mobile Hamburger Menu Button (visible only on mobile/tablet < lg) -->
-          <button
-            type="button"
-            @click="isMobileMenuOpen = true"
-            class="lg:hidden p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition"
-            aria-label="Menü öffnen"
-          >
-            <Menu class="w-5 h-5 text-amber-400" />
-          </button>
-        </div>
-      </div>
-
-      <!-- Desktop Navigation Bar (Only on large screens / iPad Landscape >= 1024px) -->
-      <div class="hidden lg:block max-w-7xl mx-auto px-4 sm:px-6 pb-3 pt-1">
-        <nav class="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            @click="setTab('dashboard')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
-          >
-            <LayoutDashboard class="w-4 h-4 shrink-0" />
-            <span>Übersicht</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('quiz')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
-          >
-            <CheckSquare class="w-4 h-4 shrink-0" />
-            <span>MC-Quiz & Prüfung</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('flashcards')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
-          >
-            <Layers class="w-4 h-4 shrink-0" />
-            <span>Karteikarten</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('matching')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950 shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
-          >
-            <Puzzle class="w-4 h-4 shrink-0" />
-            <span>Zahlen & Fristen</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('cheatsheet')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white shadow' : 'bg-slate-900/70 text-slate-300 hover:text-white hover:bg-slate-900 border border-slate-800/80'"
-          >
-            <BookOpen class="w-4 h-4 shrink-0" />
-            <span>Spickzettel</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('rewards')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap"
-            :class="
-              activeTab === 'rewards'
-                ? 'bg-rose-500 text-white font-bold shadow'
-                : 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/30'
-            "
-          >
-            <Gift class="w-4 h-4 shrink-0" />
-            <span>Belohnungen 🍣</span>
-          </button>
-
-          <button
-            type="button"
-            @click="setTab('upload')"
-            class="px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition whitespace-nowrap ml-auto"
-            :class="
-              activeTab === 'upload'
-                ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-bold shadow'
-                : 'bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/40'
-            "
-          >
-            <UploadCloud class="w-4 h-4 shrink-0" />
-            <span>PDF-Upload & KI</span>
-          </button>
-        </nav>
-      </div>
-    </header>
-
-    <!-- Mobile Fullscreen Navigation Drawer -->
-    <Teleport to="body">
-      <Transition name="drawer">
-      <div v-if="isMobileMenuOpen" class="fixed inset-0 z-[60] lg:hidden">
-        <!-- Fullscreen Panel (eigener Scroll-Container, Hintergrund bleibt fixiert) -->
-        <div
-          class="absolute inset-0 bg-slate-950 flex flex-col overflow-y-auto overscroll-contain px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
-        >
-          <div class="space-y-5 flex-1">
-            <!-- Drawer Header -->
-            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-extrabold text-sm">
-                  {{ levelInfo.current.badge }}
-                </div>
-                <div>
-                  <div class="font-bold text-sm text-white">{{ userProfile.name }}</div>
-                  <div class="text-[11px] text-amber-400 font-semibold">Level {{ levelInfo.current.level }} · {{ levelInfo.current.title }}</div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                @click="isMobileMenuOpen = false"
-                class="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
-              >
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-
-            <!-- Profile Stats Mini Card -->
-            <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3 flex items-center justify-around text-center">
-              <div>
-                <div class="text-xs font-bold text-amber-400 flex items-center justify-center gap-1">
-                  <Flame class="w-3 h-3 fill-current" />
-                  {{ userProfile.streakDays }} Tage
-                </div>
-                <div class="text-[10px] text-slate-400">Streak</div>
-              </div>
-              <div class="w-px h-6 bg-slate-800" />
-              <div>
-                <div class="text-xs font-bold text-rose-300 flex items-center justify-center gap-1">
-                  <Heart class="w-3 h-3 fill-current text-rose-400" />
-                  {{ availableCoins }} Pkt.
-                </div>
-                <div class="text-[10px] text-slate-400">Guthaben</div>
-              </div>
-              <div class="w-px h-6 bg-slate-800" />
-              <div>
-                <div class="text-xs font-bold text-cyan-400">{{ overallStats.mastered }}</div>
-                <div class="text-[10px] text-slate-400">Gemeistert</div>
-              </div>
-            </div>
-
-            <!-- Nav Links List -->
-            <div class="space-y-1">
-              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1">Lernbereiche</div>
-
-              <button
-                type="button"
-                @click="setTab('dashboard')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950' : 'text-slate-200 hover:bg-slate-800/80'"
-              >
-                <div class="flex items-center gap-3">
-                  <LayoutDashboard class="w-4 h-4" />
-                  <span>Übersicht & Module</span>
-                </div>
-                <ChevronRight class="w-4 h-4 opacity-50" />
-              </button>
-
-              <button
-                type="button"
-                @click="setTab('quiz')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'quiz' ? 'bg-amber-500 text-slate-950' : 'text-slate-200 hover:bg-slate-800/80'"
-              >
-                <div class="flex items-center gap-3">
-                  <CheckSquare class="w-4 h-4" />
-                  <span>Multiple-Choice & Prüfung</span>
-                </div>
-                <ChevronRight class="w-4 h-4 opacity-50" />
-              </button>
-
-              <button
-                type="button"
-                @click="setTab('flashcards')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'flashcards' ? 'bg-cyan-500 text-slate-950' : 'text-slate-200 hover:bg-slate-800/80'"
-              >
-                <div class="flex items-center gap-3">
-                  <Layers class="w-4 h-4" />
-                  <span>Karteikarten (Anki-Modus)</span>
-                </div>
-                <ChevronRight class="w-4 h-4 opacity-50" />
-              </button>
-
-              <button
-                type="button"
-                @click="setTab('matching')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'matching' ? 'bg-emerald-500 text-slate-950' : 'text-slate-200 hover:bg-slate-800/80'"
-              >
-                <div class="flex items-center gap-3">
-                  <Puzzle class="w-4 h-4" />
-                  <span>Zahlen- & Fristen-Trainer</span>
-                </div>
-                <ChevronRight class="w-4 h-4 opacity-50" />
-              </button>
-
-              <button
-                type="button"
-                @click="setTab('cheatsheet')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'cheatsheet' ? 'bg-violet-500 text-white' : 'text-slate-200 hover:bg-slate-800/80'"
-              >
-                <div class="flex items-center gap-3">
-                  <BookOpen class="w-4 h-4" />
-                  <span>Spickzettel & Tabellen</span>
-                </div>
-                <ChevronRight class="w-4 h-4 opacity-50" />
-              </button>
-
-              <button
-                type="button"
-                @click="setTab('rewards')"
-                class="w-full flex items-center justify-between p-3 rounded-xl text-left text-sm font-semibold transition"
-                :class="activeTab === 'rewards' ? 'bg-rose-500 text-white' : 'text-rose-300 hover:bg-rose-500/10'"
-              >
-                <div class="flex items-center gap-3">
-                  <Gift class="w-4 h-4" />
-                  <span>Belohnungs-Shop 🍣</span>
-                </div>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold">
-                  {{ availableCoins }} Pkt.
-                </span>
-              </button>
-            </div>
-
-            <!-- PDF Upload Link -->
-            <button
-              type="button"
-              @click="setTab('upload')"
-              class="w-full p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 to-rose-500/20 border border-amber-500/40 text-amber-300 text-left text-sm font-bold flex items-center justify-between transition hover:border-amber-400"
-            >
-              <div class="flex items-center gap-3">
-                <UploadCloud class="w-5 h-5 text-amber-400" />
-                <div>
-                  <div>PDF-Upload & KI</div>
-                  <div class="text-[11px] font-normal text-slate-400">Neue Skripte hochladen</div>
-                </div>
-              </div>
-              <ChevronRight class="w-4 h-4" />
-            </button>
-          </div>
-
-          <!-- Drawer Footer Tools (Cloud Sync, Backup, Reset) -->
-          <div class="pt-4 mt-6 border-t border-slate-800 space-y-2">
-            <button
-              type="button"
-              @click="isMobileMenuOpen = false; showCloudModal = true"
-              class="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center gap-2 hover:text-white"
-            >
-              <Cloud class="w-4 h-4 text-emerald-400" />
-              <span>Cloud-Sync konfigurieren</span>
-            </button>
-
-            <div class="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                @click="handleExportBackup"
-                class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-white"
-              >
-                <Download class="w-3.5 h-3.5 text-amber-400" />
-                <span>Backup</span>
-              </button>
-
-              <label
-                class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer hover:text-white"
-              >
-                <Upload class="w-3.5 h-3.5 text-cyan-400" />
-                <span>Import</span>
-                <input type="file" accept="application/json" class="hidden" @change="handleImportBackup" />
-              </label>
-            </div>
-
-            <button
-              type="button"
-              @click="confirmResetProgress"
-              class="w-full text-center text-[11px] text-slate-500 hover:text-rose-400 pt-1"
-            >
-              Lernfortschritt zurücksetzen
-            </button>
-          </div>
-        </div>
-      </div>
-      </Transition>
-    </Teleport>
-
-    <!-- Cloud Sync Setup Modal -->
-    <div
-      v-if="showCloudModal"
-      class="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overscroll-contain"
-      @click.self="showCloudModal = false"
-    >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Echtzeit-Synchronisation (iPad, iPhone & Mac)</span>
-            <h3 class="text-xl font-extrabold text-white mt-0.5 flex items-center gap-2">
-              <Cloud class="w-5 h-5 text-emerald-400" />
-              Supabase Cloud-Sync
-            </h3>
-            <p class="text-xs text-slate-400 mt-1">
-              Sobald verbunden, werden alle neu hochgeladenen PDF-Decks, der Lernfortschritt und ihre eingelösten Belohnungen automatisch zwischen allen Geräten synchronisiert.
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="showCloudModal = false"
-            class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-          >
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="space-y-1.5 sm:col-span-2">
-            <label class="text-xs font-semibold text-slate-300">
-              Supabase Project URL (oder in Netlify/Vercel als <code class="text-amber-300">VITE_SUPABASE_URL</code> setzen)
-            </label>
-            <input
-              v-model="supabaseConfig.url"
-              type="text"
-              placeholder="https://xyzcompany.supabase.co"
-              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          <div class="space-y-1.5 sm:col-span-2">
-            <label class="text-xs font-semibold text-slate-300">
-              Supabase Anon Public Key (oder in Netlify/Vercel als <code class="text-amber-300">VITE_SUPABASE_ANON_KEY</code> setzen)
-            </label>
-            <input
-              v-model="supabaseConfig.anonKey"
-              type="password"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          <div class="space-y-1.5 sm:col-span-2">
-            <label class="text-xs font-semibold text-slate-300">Profil-Name / Sync-ID (gleich auf allen Geräten)</label>
-            <input
-              v-model="supabaseConfig.syncId"
-              type="text"
-              placeholder="mtr-strahlenschutz"
-              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-        </div>
-
-        <!-- SQL Snippet Box -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-300">Einmaliges Tabellen-Setup im Supabase SQL Editor:</span>
-            <button
-              type="button"
-              @click="copySqlSchema"
-              class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-300 flex items-center gap-1.5 border border-slate-700"
-            >
-              <Check v-if="sqlCopied" class="w-3.5 h-3.5 text-emerald-400" />
-              <Copy v-else class="w-3.5 h-3.5" />
-              <span>{{ sqlCopied ? 'SQL kopiert!' : 'SQL kopieren' }}</span>
-            </button>
-          </div>
-          <pre class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-[11px] text-slate-300 overflow-x-auto font-mono leading-relaxed">{{ SUPABASE_SQL_SCHEMA }}</pre>
-        </div>
-
-        <div
-          v-if="cloudSyncError"
-          class="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-xs text-rose-200"
-        >
-          {{ cloudSyncError }}
-        </div>
-
-        <div
-          v-else-if="cloudSyncStatus === 'synced'"
-          class="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-2"
-        >
-          <Check class="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Erfolgreich mit Supabase verbunden! Alle Decks, Erfolge & Fortschritte sind synchron.</span>
-        </div>
-
-        <div class="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            @click="showCloudModal = false"
-            class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
-          >
-            Schließen
-          </button>
-          <button
-            type="button"
-            @click="saveAndTestCloudSync"
-            :disabled="!isCloudConfigured || cloudSyncStatus === 'syncing'"
-            class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-xs flex items-center gap-2 transition"
-          >
-            <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': cloudSyncStatus === 'syncing' }" />
-            <span>Verbinden & Jetzt synchronisieren</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Content Area (pb-28 on mobile so bottom bar doesn't cover anything) -->
+    <!-- Main Content Area -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-8 pb-28 lg:pb-8">
       <!-- TAB 1: DASHBOARD -->
       <div v-if="activeTab === 'dashboard'" class="space-y-6 sm:space-y-8">
@@ -920,7 +515,7 @@ function confirmResetProgress() {
                 :key="folder.id"
                 type="button"
                 @click="selectedFolderFilter = folder.id"
-                class="px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition border flex items-center gap-1.5"
+                class="px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition border flex items-center gap-1.5"
                 :class="[
                   selectedFolderFilter === folder.id
                     ? 'bg-slate-800 text-white border-amber-400 shadow'
@@ -948,27 +543,27 @@ function confirmResetProgress() {
                 <option value="az">Titel (A–Z)</option>
                 <option value="questions">Meiste Fragen zuerst</option>
                 <option value="progress-low">Wenigster Fortschritt (noch zu lernen)</option>
-                <option value="progress-high">Höchster Fortschritt (gemeistert)</option>
+                <option value="progress-high">Höchster Fortschritt</option>
               </select>
             </div>
           </div>
         </div>
 
-        <!-- Folders Accordion Section -->
-        <div class="space-y-5">
+        <!-- Folders Accordion & Deck Cards List -->
+        <div class="space-y-6">
           <div
             v-for="folder in displayedFolders"
             :key="folder.id"
-            class="bg-slate-900/70 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl transition-all"
+            class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm"
           >
-            <!-- Folder Header Card -->
-            <div class="flex flex-wrap items-center justify-between gap-3">
+            <!-- Folder Header -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
               <div
-                class="flex items-center gap-3 cursor-pointer select-none group flex-1 min-w-[220px]"
+                class="flex items-center gap-3 cursor-pointer select-none group flex-1 min-w-[200px]"
                 @click="toggleFolderCollapse(folder.id)"
               >
                 <div
-                  class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border transition group-hover:scale-105"
+                  class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition group-hover:scale-105"
                   :class="[
                     folder.id === 'nuklearmedizin' ? 'bg-purple-500/15 border-purple-500/30 text-purple-400' :
                     folder.id === 'strahlenschutz' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
@@ -985,126 +580,122 @@ function confirmResetProgress() {
                   <Folder v-else class="w-5 h-5" />
                 </div>
                 <div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h3 class="text-base sm:text-lg font-bold text-white group-hover:text-amber-400 transition">
+                  <div class="flex items-center gap-2">
+                    <h4 class="font-extrabold text-base sm:text-lg text-white group-hover:text-amber-300 transition">
                       {{ folder.name }}
-                    </h3>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">
-                      {{ getFolderStats(folder.id).deckCount }} Decks · {{ getFolderStats(folder.id).total }} Fragen
+                    </h4>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">
+                      {{ getDecksForFolder(folder.id).length }} {{ getDecksForFolder(folder.id).length === 1 ? 'Deck' : 'Decks' }}
                     </span>
                   </div>
-                  <p v-if="folder.description" class="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                    {{ folder.description }}
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    {{ folder.description || `${getFolderStats(folder.id).total} Fragen in diesem Themenblock` }}
                   </p>
                 </div>
               </div>
 
+              <!-- Folder Actions -->
               <div class="flex items-center gap-2 shrink-0">
-                <!-- Train Whole Folder Button -->
                 <button
                   v-if="getFolderStats(folder.id).total > 0"
                   type="button"
-                  @click="startQuizForDeck('folder:' + folder.id)"
-                  class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-500/10 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition shadow"
-                  title="Alle Fragen dieses Themengebiets auf einmal trainieren"
+                  @click="startQuizForDeck(`folder:${folder.id}`)"
+                  class="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition"
+                  title="Alle Fragen dieses Ordners trainieren"
                 >
-                  <Zap class="w-3.5 h-3.5 text-amber-400" />
+                  <Zap class="w-3.5 h-3.5" />
                   <span class="hidden sm:inline">Ganzen Ordner trainieren</span>
                   <span class="sm:hidden">Ordner üben</span>
+                  <span class="text-[11px] opacity-80">({{ getFolderStats(folder.id).total }})</span>
                 </button>
 
-                <!-- Collapse Toggle -->
                 <button
                   type="button"
                   @click="toggleFolderCollapse(folder.id)"
-                  class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition"
-                  :title="collapsedFolders[folder.id] ? 'Ordner aufklappen' : 'Ordner einklappen'"
+                  class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                  :title="collapsedFolders[folder.id] ? 'Ausklappen' : 'Einklappen'"
                 >
-                  <ChevronUp v-if="!collapsedFolders[folder.id]" class="w-4 h-4" />
-                  <ChevronDown v-else class="w-4 h-4" />
+                  <ChevronDown v-if="collapsedFolders[folder.id]" class="w-4 h-4" />
+                  <ChevronUp v-else class="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <!-- Folder Overall Progress Bar -->
-            <div v-if="getFolderStats(folder.id).total > 0" class="space-y-1">
-              <div class="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Themenfortschritt</span>
-                <span class="text-emerald-400 font-semibold">{{ getFolderStats(folder.id).percent }}% gemeistert</span>
-              </div>
-              <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300"
-                  :style="{ width: `${getFolderStats(folder.id).percent}%` }"
-                />
-              </div>
-            </div>
-
-            <!-- Decks Grid inside this folder -->
-            <div v-if="!collapsedFolders[folder.id]">
-              <div v-if="getDecksForFolder(folder.id).length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 pt-2">
+            <!-- Folder Decks Grid -->
+            <div v-show="!collapsedFolders[folder.id]">
+              <div v-if="getDecksForFolder(folder.id).length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                   v-for="deck in getDecksForFolder(folder.id)"
                   :key="deck.id"
-                  class="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all shadow-lg"
+                  class="bg-slate-950/70 border border-slate-800/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-slate-700 transition"
                 >
-                  <div class="space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <span class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-amber-300 border border-slate-800">
-                        {{ getDeckStats(deck.id).total }} Fragen
-                      </span>
-
-                      <!-- Folder Switch Button (Mobile-first Bottom Sheet trigger) -->
-                      <div class="flex items-center gap-1.5 ml-auto">
+                  <div class="space-y-2.5">
+                    <!-- Deck Header Row -->
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          {{ getDeckStats(deck.id).total }} Fragen
+                        </span>
+                        
+                        <!-- Move Deck Button / Pill -->
                         <button
                           type="button"
-                          @click.stop="openMoveModal(deck)"
-                          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border border-slate-800 transition shadow-sm"
-                          title="In anderen Themenordner verschieben"
+                          @click="openMoveModal(deck)"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-900 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-amber-500/40 transition"
+                          title="Themenordner wechseln"
                         >
-                          <Folder class="w-3.5 h-3.5 text-amber-400" />
-                          <span class="max-w-[110px] truncate">{{ getFolderName(deck.folderId) }}</span>
-                          <ChevronDown class="w-3 h-3 opacity-60" />
+                          <Folder class="w-3 h-3 text-amber-400" />
+                          <span>{{ getFolderName(deck.folderId) }}</span>
+                          <span class="text-[9px] text-slate-500">✎</span>
                         </button>
+                      </div>
 
-                        <!-- Reorder Up/Down buttons (Visible in manual/default sort mode) -->
-                        <div v-if="activeSortMode === 'default'" class="inline-flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
-                          <button
-                            type="button"
-                            @click.stop="moveDeckOrder(deck.id, 'up')"
-                            class="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition"
-                            title="Nach oben verschieben"
-                          >
-                            <ChevronUp class="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            @click.stop="moveDeckOrder(deck.id, 'down')"
-                            class="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition"
-                            title="Nach unten verschieben"
-                          >
-                            <ChevronDown class="w-3 h-3" />
-                          </button>
-                        </div>
+                      <!-- Reorder Buttons -->
+                      <div class="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          @click="moveDeckOrder(deck.id, 'up')"
+                          class="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-850 transition"
+                          title="Nach oben / links"
+                        >
+                          <ChevronUp class="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          @click="moveDeckOrder(deck.id, 'down')"
+                          class="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-850 transition"
+                          title="Nach unten / rechts"
+                        >
+                          <ChevronDown class="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
 
-                    <h4 class="text-sm sm:text-base font-bold text-white leading-snug">
-                      {{ deck.title }}
-                    </h4>
-                    <p class="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                      {{ deck.description }}
-                    </p>
+                    <div>
+                      <h5 class="font-bold text-white text-base leading-snug line-clamp-2">
+                        {{ deck.title }}
+                      </h5>
+                      <p class="text-xs text-slate-400 line-clamp-2 mt-1">
+                        {{ deck.description }}
+                      </p>
+                    </div>
 
-                    <!-- Progress bar -->
-                    <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                      <div
-                        class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
-                        :style="{ width: `${getDeckStats(deck.id).percent}%` }"
-                      />
+                    <!-- Progress Bar -->
+                    <div class="space-y-1 pt-1">
+                      <div class="flex items-center justify-between text-[11px]">
+                        <span class="text-slate-400 font-medium">Gemeistert</span>
+                        <span class="text-emerald-400 font-bold">{{ getDeckStats(deck.id).percent }}%</span>
+                      </div>
+                      <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
+                          :style="{ width: `${getDeckStats(deck.id).percent}%` }"
+                        />
+                      </div>
                     </div>
                   </div>
 
+                  <!-- Action Buttons -->
                   <div class="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-800/80">
                     <button
                       type="button"
@@ -1126,7 +717,7 @@ function confirmResetProgress() {
                 </div>
               </div>
 
-              <!-- Empty folder placeholder -->
+              <!-- Empty Folder Placeholder -->
               <div v-else class="text-center p-8 bg-slate-950/40 border border-dashed border-slate-800 rounded-2xl space-y-2">
                 <p class="text-xs text-slate-400">In diesem Themengebiet sind noch keine Module vorhanden.</p>
                 <button
@@ -1165,7 +756,7 @@ function confirmResetProgress() {
       />
     </main>
 
-    <!-- Native App Style Mobile Bottom Navigation Bar (Pixel 9 XL & iPhone Optimized) -->
+    <!-- Native App Style Mobile Bottom Navigation Bar (Pixel 9 XL & iPhone) -->
     <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-2 py-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] shadow-2xl">
       <div class="grid grid-cols-5 items-center text-center">
         <!-- 1. Übersicht -->
@@ -1246,130 +837,5 @@ function confirmResetProgress() {
         </button>
       </div>
     </nav>
-
-    <!-- Move Deck to Folder Modal / Bottom Sheet (Mobile-First & Tablet-optimized) -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showMoveDeckModal"
-          class="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overscroll-contain"
-          @click.self="showMoveDeckModal = false"
-        >
-          <div
-            class="bg-slate-900 border border-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-200"
-          >
-            <!-- Mobile Grab Handle -->
-            <div class="w-12 h-1.5 bg-slate-700/80 rounded-full mx-auto sm:hidden" />
-
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Themenordner wechseln</span>
-                <h3 class="text-base sm:text-lg font-bold text-white mt-0.5 leading-snug">
-                  „{{ deckToMove?.title }}“
-                </h3>
-                <p class="text-xs text-slate-400 mt-1">
-                  Tippe auf den gewünschten Ordner, um dieses Lernset dorthin zu verschieben:
-                </p>
-              </div>
-              <button
-                type="button"
-                @click="showMoveDeckModal = false"
-                class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white shrink-0"
-              >
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-
-            <!-- List of Folders (Big touch targets for Pixel, iPhone & iPad) -->
-            <div class="space-y-2 pt-1">
-              <button
-                v-for="folder in folders"
-                :key="folder.id"
-                type="button"
-                @click="selectTargetFolder(folder.id)"
-                class="w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 active:scale-[0.99]"
-                :class="[
-                  (deckToMove?.folderId || 'custom') === folder.id
-                    ? 'bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10'
-                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-200'
-                ]"
-              >
-                <div class="flex items-center gap-3 min-w-0">
-                  <div
-                    class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border"
-                    :class="[
-                      folder.id === 'nuklearmedizin' ? 'bg-purple-500/15 border-purple-500/30 text-purple-400' :
-                      folder.id === 'strahlenschutz' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
-                      folder.id === 'roentgendiagnostik' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' :
-                      folder.id === 'strahlentherapie' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
-                      folder.id === 'anatomie' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' :
-                      'bg-blue-500/15 border-blue-500/30 text-blue-400'
-                    ]"
-                  >
-                    <Atom v-if="folder.id === 'nuklearmedizin'" class="w-5 h-5" />
-                    <Shield v-else-if="folder.id === 'strahlenschutz'" class="w-5 h-5" />
-                    <Crosshair v-else-if="folder.id === 'strahlentherapie'" class="w-5 h-5" />
-                    <Activity v-else-if="folder.id === 'anatomie'" class="w-5 h-5" />
-                    <Folder v-else class="w-5 h-5" />
-                  </div>
-                  <div class="min-w-0">
-                    <div class="font-bold text-sm text-white truncate">{{ folder.name }}</div>
-                    <div class="text-[11px] text-slate-400">
-                      {{ getFolderStats(folder.id).deckCount }} Decks · {{ getFolderStats(folder.id).total }} Fragen
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="(deckToMove?.folderId || 'custom') === folder.id" class="flex items-center gap-1.5 text-xs font-bold text-amber-400 shrink-0">
-                  <Check class="w-4 h-4" />
-                  <span class="text-[11px]">Hier</span>
-                </div>
-                <ChevronRight v-else class="w-4 h-4 text-slate-600 shrink-0" />
-              </button>
-            </div>
-
-            <!-- Inline New Folder Creator -->
-            <div class="pt-2 border-t border-slate-800">
-              <div v-if="!showInlineNewFolder">
-                <button
-                  type="button"
-                  @click="showInlineNewFolder = true"
-                  class="w-full p-3 rounded-2xl bg-slate-950 border border-dashed border-slate-700 text-slate-300 hover:text-white hover:border-amber-500/50 text-xs font-bold flex items-center justify-center gap-2 transition"
-                >
-                  <Plus class="w-4 h-4 text-amber-400" />
-                  <span>Neuen Themenordner anlegen & dorthin verschieben</span>
-                </button>
-              </div>
-              <div v-else class="space-y-2">
-                <label class="text-xs font-semibold text-slate-300">Neuer Ordnername:</label>
-                <div class="flex gap-2">
-                  <input
-                    v-model="inlineNewFolderName"
-                    type="text"
-                    placeholder="z.B. Nuklearmedizin oder Klausur..."
-                    class="flex-1 bg-slate-950 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                    @keyup.enter="handleCreateFolderInModal"
-                  />
-                  <button
-                    type="button"
-                    @click="handleCreateFolderInModal"
-                    class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0"
-                  >
-                    Verschieben
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
