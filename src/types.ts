@@ -50,6 +50,13 @@ export interface QuestionProgress {
   nextReviewAt?: string
   bookmarked?: boolean
   personalNote?: string
+  // Dedizierte MC-Quiz Fortschrittsdaten
+  mcAttempts?: number
+  mcCorrectCount?: number
+  mcLastCorrect?: boolean
+  // Dedizierte Karteikarten Fortschrittsdaten
+  flashcardAttempts?: number
+  flashcardBox?: number
 }
 
 export interface RewardItem {

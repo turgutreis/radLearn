@@ -60,6 +60,23 @@ export function useProgressStore() {
     )
   }
 
+  function isQuestionMcMastered(p?: QuestionProgress): boolean {
+    if (!p) return false
+    if (p.mcLastCorrect !== undefined) {
+      return p.mcLastCorrect === true && (p.mcCorrectCount || 0) > 0
+    }
+    // Fallback für ältere Daten vor der Trennung von MC & Karteikarten:
+    return p.lastCorrect === true && (p.correctCount || 0) > 0
+  }
+
+  function isQuestionMcAnswered(p?: QuestionProgress): boolean {
+    if (!p) return false
+    if (p.mcAttempts !== undefined) {
+      return p.mcAttempts > 0
+    }
+    return p.attempts > 0
+  }
+
   function recordAnswer(
     questionId: string,
     isCorrect: boolean,
@@ -69,7 +86,7 @@ export function useProgressStore() {
     }
   ) {
     const existing = getProgress(questionId)
-    const isFirstTimeCorrect = existing.correctCount === 0 && isCorrect
+    const isFirstTimeCorrect = ((existing.mcCorrectCount ?? existing.correctCount) === 0) && isCorrect
     const nextBox = isCorrect ? Math.min(4, existing.box + 1) : 1
 
     progressMap.value[questionId] = {
@@ -79,7 +96,11 @@ export function useProgressStore() {
       wrongCount: existing.wrongCount + (isCorrect ? 0 : 1),
       lastAnsweredAt: new Date().toISOString(),
       lastCorrect: isCorrect,
-      box: nextBox
+      box: nextBox,
+      // Dedizierte MC-Quiz Fortschrittsdaten:
+      mcAttempts: (existing.mcAttempts || 0) + 1,
+      mcCorrectCount: (existing.mcCorrectCount || 0) + (isCorrect ? 1 : 0),
+      mcLastCorrect: isCorrect
     }
 
     if (isCorrect) {
@@ -108,11 +129,11 @@ export function useProgressStore() {
     progressMap.value[questionId] = {
       ...existing,
       attempts: existing.attempts + 1,
-      correctCount: existing.correctCount + (isCorrect ? 1 : 0),
-      wrongCount: existing.wrongCount + (rating === 'again' ? 1 : 0),
       lastAnsweredAt: new Date().toISOString(),
-      lastCorrect: isCorrect,
-      box: boxMap[rating]
+      box: boxMap[rating],
+      flashcardAttempts: (existing.flashcardAttempts || 0) + 1,
+      flashcardBox: boxMap[rating]
+      // WICHTIG: mcAttempts und mcCorrectCount bleiben unberührt, damit die MC-Quiz Progress-Bar unbeeinflusst bleibt!
     }
 
     if (isCorrect) {
@@ -167,18 +188,23 @@ export function useProgressStore() {
     for (const q of qs) {
       const p = progressMap.value[q.id]
       if (!p) continue
-      if (p.attempts > 0) answered++
-      if (p.box >= 3 && p.lastCorrect) mastered++
-      if (p.lastCorrect === false) wrong++
+      if (isQuestionMcAnswered(p)) answered++
+      if (isQuestionMcMastered(p)) mastered++
+      if (p.mcLastCorrect === false || (p.mcLastCorrect === undefined && p.lastCorrect === false)) wrong++
     }
+
+    const percent = total > 0 ? Math.round((mastered / total) * 100) : 0
+    const answeredPercent = total > 0 ? Math.round((answered / total) * 100) : 0
 
     return {
       deckCount: decksInFolder.length,
       total,
       answered,
       mastered,
+      mcCorrect: mastered,
       wrong,
-      percent: total > 0 ? Math.round((mastered / total) * 100) : 0
+      percent,
+      answeredPercent
     }
   }
 
@@ -192,17 +218,22 @@ export function useProgressStore() {
     for (const q of qs) {
       const p = progressMap.value[q.id]
       if (!p) continue
-      if (p.attempts > 0) answered++
-      if (p.box >= 3 && p.lastCorrect) mastered++
-      if (p.lastCorrect === false) wrong++
+      if (isQuestionMcAnswered(p)) answered++
+      if (isQuestionMcMastered(p)) mastered++
+      if (p.mcLastCorrect === false || (p.mcLastCorrect === undefined && p.lastCorrect === false)) wrong++
     }
+
+    const percent = total > 0 ? Math.round((mastered / total) * 100) : 0
+    const answeredPercent = total > 0 ? Math.round((answered / total) * 100) : 0
 
     return {
       total,
       answered,
       mastered,
+      mcCorrect: mastered,
       wrong,
-      percent: total > 0 ? Math.round((mastered / total) * 100) : 0
+      percent,
+      answeredPercent
     }
   }
 
@@ -216,9 +247,9 @@ export function useProgressStore() {
     for (const q of allQuestions.value) {
       const p = progressMap.value[q.id]
       if (!p) continue
-      if (p.attempts > 0) answered++
-      if (p.box >= 3 && p.lastCorrect) mastered++
-      if (p.lastCorrect === false) needsReview++
+      if (isQuestionMcAnswered(p)) answered++
+      if (isQuestionMcMastered(p)) mastered++
+      if (p.mcLastCorrect === false || (p.mcLastCorrect === undefined && p.lastCorrect === false)) needsReview++
       if (p.bookmarked) bookmarked++
     }
 
@@ -227,6 +258,7 @@ export function useProgressStore() {
       total,
       answered,
       mastered,
+      mcCorrect: mastered,
       needsReview,
       bookmarked,
       masteryPercent

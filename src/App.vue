@@ -680,16 +680,19 @@ function confirmResetProgress() {
                       </p>
                     </div>
 
-                    <!-- Progress Bar -->
+                    <!-- Progress Bar (MC-Quiz Fortschritt) -->
                     <div class="space-y-1 pt-1">
                       <div class="flex items-center justify-between text-[11px]">
-                        <span class="text-slate-400 font-medium">Gemeistert</span>
-                        <span class="text-emerald-400 font-bold">{{ getDeckStats(deck.id).answered }}%</span>
+                        <span class="text-slate-400 font-medium">MC-Quiz Erfolg</span>
+                        <span class="text-emerald-400 font-bold">
+                          {{ getDeckStats(deck.id).percent }}%
+                          <span class="text-[10px] text-slate-400 font-normal">({{ getDeckStats(deck.id).mcCorrect }}/{{ getDeckStats(deck.id).total }})</span>
+                        </span>
                       </div>
                       <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
                         <div
-                          class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all"
-                          :style="{ width: `${getDeckStats(deck.id).answered}%` }"
+                          class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300"
+                          :style="{ width: `${getDeckStats(deck.id).percent}%` }"
                         />
                       </div>
                     </div>
