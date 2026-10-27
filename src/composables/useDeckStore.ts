@@ -6,6 +6,15 @@ import { STORAGE_KEYS, loadJson } from '../services/storageKeys'
 export function detectBestFolderForDeck(title: string, description = ''): string {
   const text = (title + ' ' + description).toLowerCase()
   if (
+    text.includes('examen') ||
+    text.includes('staatsexamen') ||
+    text.includes('fächergruppe') ||
+    text.includes('klausur') ||
+    text.includes('fallbeispiel')
+  ) {
+    return 'examen'
+  }
+  if (
     text.includes('nuklear') ||
     text.includes('szinti') ||
     text.includes('spect') ||
@@ -61,7 +70,11 @@ export function detectBestFolderForDeck(title: string, description = ''): string
 const rawLoadedFolders = loadJson<StudyFolder[]>(STORAGE_KEYS.FOLDERS, DEFAULT_FOLDERS)
 const mergedFoldersMap = new Map<string, StudyFolder>()
 for (const df of DEFAULT_FOLDERS) mergedFoldersMap.set(df.id, df)
-for (const f of rawLoadedFolders) mergedFoldersMap.set(f.id, f)
+for (const f of rawLoadedFolders) {
+  if (!mergedFoldersMap.has(f.id)) {
+    mergedFoldersMap.set(f.id, f)
+  }
+}
 const folders = ref<StudyFolder[]>(Array.from(mergedFoldersMap.values()))
 
 const rawCustomDecks = loadJson<StudyDeck[]>(STORAGE_KEYS.CUSTOM_DECKS, [])

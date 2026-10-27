@@ -1,6 +1,15 @@
 import type { StudyDeck, Question, MatchingPair, StudyFolder } from '../types'
+import { EXAM_DECKS, EXAM_QUESTIONS } from './examData'
 
 export const DEFAULT_FOLDERS: StudyFolder[] = [
+  {
+    id: 'examen',
+    name: '🎓 Staatsexamen (Fächergruppe 2)',
+    icon: 'GraduationCap',
+    color: 'amber',
+    description: 'Echte MTR-Examensprüfung: 4 interdisziplinäre Fallbeispiele mit Original-Lösungen & Punkten',
+    isBuiltIn: true
+  },
   {
     id: 'strahlenschutz',
     name: 'Strahlenschutz, Recht & Dosimetrie',
@@ -194,7 +203,8 @@ export const INITIAL_DECKS: StudyDeck[] = [
       'Theranostik: Kombination aus Diagnostik & zielgerichteter Therapie – exakt derselbe Ligand wird mit Diagnostik- oder Therapienukliden markiert (z.B. PSMA bei Prostatakarzinomen).',
       'Strahlenschutz: Höchste Relevanz, da mit offenen Radionukliden hantiert wird (Kontaminations- und Inkorporationsschutz im Heißlabor).'
     ]
-  }
+  },
+  ...EXAM_DECKS
 ]
 
 export const INITIAL_QUESTIONS: Question[] = [
@@ -1230,7 +1240,8 @@ export const INITIAL_QUESTIONS: Question[] = [
     type: 'mc',
     flashcardFront: 'Wie entsteht aus der emittierten Strahlung ein nuklearmedizinisches Bild?',
     flashcardBack: 'Der angereicherte Radiotracer sendet Strahlung aus dem Körperinneren aus. Externe Detektoren (Gammakamera, SPECT-Köpfe, PET-Ring) erfassen die Photonen und rekonstruieren computergestützt die exakte Aktivitätsverteilung im Raum.'
-  }
+  },
+  ...EXAM_QUESTIONS
 ]
 
 export const MATCHING_PAIRS: MatchingPair[] = [

@@ -23,7 +23,8 @@ import {
   Atom,
   Crosshair,
   Activity,
-  ArrowUpDown
+  ArrowUpDown,
+  GraduationCap
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
 import QuizMode from './components/QuizMode.vue'
@@ -565,6 +566,7 @@ function confirmResetProgress() {
                 <div
                   class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition group-hover:scale-105"
                   :class="[
+                    folder.id === 'examen' ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 ring-1 ring-amber-400/30 shadow-lg shadow-amber-500/10' :
                     folder.id === 'nuklearmedizin' ? 'bg-purple-500/15 border-purple-500/30 text-purple-400' :
                     folder.id === 'strahlenschutz' ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' :
                     folder.id === 'roentgendiagnostik' ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400' :
@@ -573,7 +575,8 @@ function confirmResetProgress() {
                     'bg-blue-500/15 border-blue-500/30 text-blue-400'
                   ]"
                 >
-                  <Atom v-if="folder.id === 'nuklearmedizin'" class="w-5 h-5" />
+                  <GraduationCap v-if="folder.id === 'examen'" class="w-5 h-5" />
+                  <Atom v-else-if="folder.id === 'nuklearmedizin'" class="w-5 h-5" />
                   <Shield v-else-if="folder.id === 'strahlenschutz'" class="w-5 h-5" />
                   <Crosshair v-else-if="folder.id === 'strahlentherapie'" class="w-5 h-5" />
                   <Activity v-else-if="folder.id === 'anatomie'" class="w-5 h-5" />
