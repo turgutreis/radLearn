@@ -28,7 +28,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-3">
+  <header class="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-3">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
       <!-- Logo & App Name -->
       <div

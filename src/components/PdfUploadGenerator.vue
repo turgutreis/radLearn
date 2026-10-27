@@ -652,8 +652,8 @@ async function startBatchProcessing() {
           isDragging
             ? 'border-amber-400 bg-amber-500/10'
             : uploadQueue.length > 0
-              ? 'border-slate-700 hover:border-amber-500/50 bg-slate-800/40'
-              : 'border-slate-700 hover:border-amber-500/60 bg-slate-800/60'
+              ? 'border-slate-800 hover:border-amber-500/50 bg-slate-950/30'
+              : 'border-slate-700 hover:border-amber-500/60 bg-slate-950/50'
         "
       >
         <div class="space-y-3">
@@ -695,7 +695,7 @@ async function startBatchProcessing() {
       <!-- Single Multi-Page PDF Deep Chunking Controls -->
       <div
         v-if="singlePdfItem && (singlePdfItem.totalPages || 0) > 1"
-        class="bg-slate-800/90 border border-amber-500/30 rounded-2xl p-5 space-y-4"
+        class="bg-slate-950/90 border border-amber-500/30 rounded-2xl p-5 space-y-4"
       >
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="space-y-0.5">
@@ -763,7 +763,7 @@ async function startBatchProcessing() {
           v-model="manualText"
           rows="4"
           placeholder="Hier kannst du auch Notizen, Zusammenfassungen oder Textpassagen aus beliebigen Quellen direkt einfügen..."
-          class="w-full bg-slate-800 border border-slate-700 rounded-2xl p-4 text-xs sm:text-sm text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-amber-500 font-mono leading-relaxed"
+          class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs sm:text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono leading-relaxed"
         />
       </div>
 
@@ -791,7 +791,7 @@ async function startBatchProcessing() {
               v-model="newFolderName"
               type="text"
               placeholder="z.B. Nuklearmedizin..."
-              class="flex-1 bg-slate-800 border border-amber-500/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              class="flex-1 bg-slate-950 border border-amber-500/60 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
               @keyup.enter="handleCreateNewFolder"
             />
             <button
@@ -806,7 +806,7 @@ async function startBatchProcessing() {
           <select
             v-else
             v-model="selectedFolderId"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
           >
             <option v-for="folder in folders" :key="folder.id" :value="folder.id">
               {{ folder.name }}
@@ -822,7 +822,7 @@ async function startBatchProcessing() {
           <select
             v-if="uploadQueue.length > 1"
             v-model.number="batchQuestionsPerFile"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
           >
             <option :value="4">4 Fragen pro Seite (Kompakt)</option>
             <option :value="6">6 Fragen pro Seite (Empfohlen: ~{{ uploadQueue.length * 6 }} Fragen)</option>
@@ -832,7 +832,7 @@ async function startBatchProcessing() {
           <select
             v-else
             v-model.number="questionCount"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
           >
             <option :value="8">8 Fragen (Kompakt)</option>
             <option :value="12">12 Fragen</option>
@@ -848,13 +848,13 @@ async function startBatchProcessing() {
             v-model="focusAreas"
             type="text"
             placeholder="z.B. Schemata, Grenzwerte, Fallbeispiele..."
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-500"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
           />
         </div>
       </div>
 
       <!-- Live Batch Progress Bar -->
-      <div v-if="isGenerating && batchProgressText" class="bg-slate-800 border border-amber-500/40 rounded-2xl p-4 space-y-2">
+      <div v-if="isGenerating && batchProgressText" class="bg-slate-950 border border-amber-500/40 rounded-2xl p-4 space-y-2">
         <div class="flex items-center justify-between text-xs font-bold text-amber-300">
           <span class="flex items-center gap-2">
             <Loader2 class="w-4 h-4 animate-spin shrink-0" />

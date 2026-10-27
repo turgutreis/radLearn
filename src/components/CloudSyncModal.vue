@@ -67,7 +67,7 @@ function copySqlSchema() {
             v-model="supabaseConfig.url"
             type="text"
             placeholder="https://xyzcompany.supabase.co"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -79,7 +79,7 @@ function copySqlSchema() {
             v-model="supabaseConfig.anonKey"
             type="password"
             placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
           />
         </div>
 
@@ -89,7 +89,7 @@ function copySqlSchema() {
             v-model="supabaseConfig.syncId"
             type="text"
             placeholder="mtr-strahlenschutz"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
           />
         </div>
       </div>
@@ -108,7 +108,7 @@ function copySqlSchema() {
             <span>{{ sqlCopied ? 'SQL kopiert!' : 'SQL kopieren' }}</span>
           </button>
         </div>
-        <pre class="bg-slate-800/80 border border-slate-700 rounded-2xl p-3.5 text-[11px] text-slate-300 overflow-x-auto font-mono leading-relaxed">{{ SUPABASE_SQL_SCHEMA }}</pre>
+        <pre class="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-[11px] text-slate-300 overflow-x-auto font-mono leading-relaxed">{{ SUPABASE_SQL_SCHEMA }}</pre>
       </div>
 
       <div

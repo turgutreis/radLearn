@@ -188,7 +188,7 @@ const isSortCorrect = computed(() =>
                 ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300/70 opacity-60 cursor-default'
                 : selectedLeftId === pair.id
                   ? 'bg-amber-500/20 border-amber-500 text-white shadow-md'
-                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-slate-100'
+                  : 'bg-slate-950/70 border-slate-800 hover:border-slate-600 text-slate-200'
             ]"
           >
             <div>
@@ -213,8 +213,8 @@ const isSortCorrect = computed(() =>
               matchedIds.has(pair.id)
                 ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300/70 opacity-60 cursor-default'
                 : selectedLeftId
-                  ? 'bg-slate-800/90 border-slate-700 hover:border-cyan-400 text-slate-100 cursor-pointer shadow-sm'
-                  : 'bg-slate-800/50 border-slate-700/80 text-slate-300'
+                  ? 'bg-slate-950/80 border-slate-700 hover:border-cyan-400 text-slate-100 cursor-pointer'
+                  : 'bg-slate-950/50 border-slate-800/80 text-slate-300'
             ]"
           >
             <div class="text-sm font-medium">{{ pair.right }}</div>
@@ -251,13 +251,13 @@ const isSortCorrect = computed(() =>
         <div
           v-for="(item, idx) in userOrgans"
           :key="item.id"
-          class="p-4 rounded-2xl border bg-slate-800/80 flex items-center justify-between gap-4"
+          class="p-4 rounded-2xl border bg-slate-950/80 flex items-center justify-between gap-4"
           :class="
             sortChecked
               ? item.groupOrder === idx + 1
                 ? 'border-emerald-500/60 bg-emerald-950/20'
                 : 'border-rose-500/60 bg-rose-950/20'
-              : 'border-slate-700'
+              : 'border-slate-800'
           "
         >
           <div class="flex items-center gap-3.5">

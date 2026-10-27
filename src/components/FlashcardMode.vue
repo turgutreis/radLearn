@@ -187,8 +187,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         class="cursor-pointer select-none rounded-3xl border transition-all duration-300 min-h-[340px] p-7 sm:p-10 flex flex-col justify-between shadow-2xl relative overflow-hidden"
         :class="
           !isFlipped
-            ? 'bg-gradient-to-br from-slate-800 via-slate-800 to-slate-900 border-slate-700 hover:border-cyan-500/50 shadow-xl'
-            : 'bg-gradient-to-br from-slate-800 via-cyan-950/30 to-slate-850 border-cyan-500/50 shadow-xl'
+            ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-slate-800 hover:border-cyan-500/50'
+            : 'bg-gradient-to-br from-slate-900 via-cyan-950/25 to-slate-950 border-cyan-500/50'
         "
       >
         <!-- Card Header -->
@@ -242,7 +242,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {{ currentCard.flashcardFront || currentCard.question }}
             </div>
-            <div class="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed font-medium bg-slate-800/80 p-5 rounded-2xl border border-slate-700/80">
+            <div class="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed font-medium bg-slate-950/60 p-5 rounded-2xl border border-slate-800">
               {{ currentCard.flashcardBack }}
             </div>
 
