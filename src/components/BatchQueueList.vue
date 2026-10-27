@@ -39,7 +39,7 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <template>
-  <div v-if="queue.length > 0" class="space-y-3 bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-5">
+  <div v-if="queue.length > 0" class="space-y-3 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 sm:p-5">
     <!-- Queue Header -->
     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
       <div class="flex items-center gap-2">
@@ -93,7 +93,7 @@ function formatFileSize(bytes: number): string {
         </span>
 
         <!-- Image Thumbnail or Document Icon -->
-        <div class="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center">
+        <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
           <img
             v-if="item.previewUrl"
             :src="item.previewUrl"

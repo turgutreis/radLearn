@@ -81,7 +81,7 @@ function handleSelectTab(tab: string) {
             </div>
 
             <!-- Quick Stats in Drawer -->
-            <div class="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-3 grid grid-cols-3 text-center gap-1">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 grid grid-cols-3 text-center gap-1">
               <div>
                 <div class="text-xs font-bold text-amber-400">{{ userProfile.streakDays }} 🔥</div>
                 <div class="text-[10px] text-slate-400">Tage Streak</div>
@@ -208,7 +208,7 @@ function handleSelectTab(tab: string) {
             <button
               type="button"
               @click="emit('close'); emit('openCloud')"
-              class="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center gap-2 hover:text-white"
+              class="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 hover:text-white hover:border-slate-600 transition"
             >
               <Cloud class="w-4 h-4 text-emerald-400" />
               <span>Cloud-Sync konfigurieren</span>
@@ -218,14 +218,14 @@ function handleSelectTab(tab: string) {
               <button
                 type="button"
                 @click="emit('exportBackup')"
-                class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-white"
+                class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-1.5 hover:text-white hover:border-slate-600 transition"
               >
                 <Download class="w-3.5 h-3.5 text-amber-400" />
                 <span>Backup</span>
               </button>
 
               <label
-                class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer hover:text-white"
+                class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer hover:text-white hover:border-slate-600 transition"
               >
                 <Upload class="w-3.5 h-3.5 text-cyan-400" />
                 <span>Import</span>

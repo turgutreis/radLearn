@@ -89,7 +89,7 @@ function handleCreateFolder() {
               :class="[
                 (deck?.folderId || 'custom') === folder.id
                   ? 'bg-amber-500/15 border-amber-500 text-white shadow-lg shadow-amber-500/10'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-200'
+                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-200'
               ]"
             >
               <div class="flex items-center gap-3 min-w-0">
@@ -134,7 +134,7 @@ function handleCreateFolder() {
               <button
                 type="button"
                 @click="showInlineNewFolder = true"
-                class="w-full p-3 rounded-2xl bg-slate-950 border border-dashed border-slate-700 text-slate-300 hover:text-white hover:border-amber-500/50 text-xs font-bold flex items-center justify-center gap-2 transition"
+                class="w-full p-3 rounded-2xl bg-slate-800/90 border border-dashed border-slate-700 text-slate-200 hover:text-white hover:border-amber-500/50 text-xs font-bold flex items-center justify-center gap-2 transition"
               >
                 <Plus class="w-4 h-4 text-amber-400" />
                 <span>Neuen Themenordner anlegen & dorthin verschieben</span>
@@ -147,7 +147,7 @@ function handleCreateFolder() {
                   v-model="inlineNewFolderName"
                   type="text"
                   placeholder="z.B. Mammographie / CT..."
-                  class="flex-1 bg-slate-950 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                  class="flex-1 bg-slate-800 border border-amber-500/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   @keyup.enter="handleCreateFolder"
                 />
                 <button

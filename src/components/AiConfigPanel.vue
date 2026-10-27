@@ -12,7 +12,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="isOpen" class="bg-slate-950/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+  <div v-if="isOpen" class="bg-slate-800/90 border border-slate-700 rounded-2xl p-5 space-y-4">
     <div class="flex flex-wrap items-center gap-2">
       <button
         v-for="p in (['gemini', 'openai', 'anthropic', 'ollama'] as const)"

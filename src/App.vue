@@ -228,7 +228,7 @@ function confirmResetProgress() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
+  <div class="min-h-screen text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
     <!-- Header Component -->
     <AppHeader
       :active-tab="activeTab"
@@ -443,21 +443,21 @@ function confirmResetProgress() {
 
           <!-- KPI Cards -->
           <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2.5 sm:gap-3 w-full lg:w-80 shrink-0">
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 sm:p-4">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 sm:p-4">
               <div class="text-xl sm:text-2xl font-extrabold text-white">{{ overallStats.total }}</div>
-              <div class="text-[11px] sm:text-xs text-slate-400">Prüfungsfragen</div>
+              <div class="text-[11px] sm:text-xs text-slate-300">Prüfungsfragen</div>
             </div>
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 sm:p-4">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 sm:p-4">
               <div class="text-xl sm:text-2xl font-extrabold text-emerald-400">{{ overallStats.masteryPercent }}%</div>
-              <div class="text-[11px] sm:text-xs text-slate-400">Sicher gemeistert</div>
+              <div class="text-[11px] sm:text-xs text-slate-300">Sicher gemeistert</div>
             </div>
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 sm:p-4 cursor-pointer hover:border-rose-500/40 transition" @click="setTab('rewards')">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 sm:p-4 cursor-pointer hover:border-rose-500/40 transition" @click="setTab('rewards')">
               <div class="text-xl sm:text-2xl font-extrabold text-rose-400">{{ availableCoins }} 💖</div>
-              <div class="text-[11px] sm:text-xs text-slate-400">Belohnungs-Punkte</div>
+              <div class="text-[11px] sm:text-xs text-slate-300">Belohnungs-Punkte</div>
             </div>
-            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 sm:p-4">
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 sm:p-4">
               <div class="text-xl sm:text-2xl font-extrabold text-amber-400">{{ userProfile.streakDays }} 🔥</div>
-              <div class="text-[11px] sm:text-xs text-slate-400">Tage Streak</div>
+              <div class="text-[11px] sm:text-xs text-slate-300">Tage Streak</div>
             </div>
           </div>
         </div>
@@ -524,7 +524,7 @@ function confirmResetProgress() {
                 ]"
               >
                 <span>{{ folder.name }}</span>
-                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-950 text-slate-400 font-bold">
+                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-900 text-slate-300 font-bold">
                   {{ getFolderStats(folder.id).deckCount }}
                 </span>
               </button>
@@ -555,7 +555,7 @@ function confirmResetProgress() {
           <div
             v-for="folder in displayedFolders"
             :key="folder.id"
-            class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm"
+            class="bg-slate-800/60 border border-slate-700/70 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm backdrop-blur-sm"
           >
             <!-- Folder Header -->
             <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
@@ -630,7 +630,7 @@ function confirmResetProgress() {
                 <div
                   v-for="deck in getDecksForFolder(folder.id)"
                   :key="deck.id"
-                  class="bg-slate-950/70 border border-slate-800/90 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-slate-700 transition"
+                  class="bg-slate-850/90 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between gap-4 hover:border-slate-500/80 transition shadow-sm"
                 >
                   <div class="space-y-2.5">
                     <!-- Deck Header Row -->
@@ -724,7 +724,7 @@ function confirmResetProgress() {
               </div>
 
               <!-- Empty Folder Placeholder -->
-              <div v-else class="text-center p-8 bg-slate-950/40 border border-dashed border-slate-800 rounded-2xl space-y-2">
+              <div v-else class="text-center p-8 bg-slate-800/40 border border-dashed border-slate-700 rounded-2xl space-y-2">
                 <p class="text-xs text-slate-400">In diesem Themengebiet sind noch keine Module vorhanden.</p>
                 <button
                   type="button"
@@ -763,7 +763,7 @@ function confirmResetProgress() {
     </main>
 
     <!-- Native App Style Mobile Bottom Navigation Bar (Pixel 9 XL & iPhone) -->
-    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-2 py-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] shadow-2xl">
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/90 px-2 py-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] shadow-2xl">
       <div class="grid grid-cols-5 items-center text-center">
         <!-- 1. Übersicht -->
         <button

@@ -202,7 +202,7 @@ function repeatWrongOnly() {
 
       <div class="flex flex-wrap items-center gap-3">
         <!-- Mode Toggle -->
-        <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+        <div class="inline-flex rounded-xl bg-slate-800 p-1 border border-slate-700">
           <button
             type="button"
             @click="examMode = false; restartQuiz()"
@@ -318,7 +318,7 @@ function repeatWrongOnly() {
         <div
           v-for="(q, idx) in activeQuestions"
           :key="q.id"
-          class="p-4 rounded-2xl border bg-slate-950/60 space-y-2"
+          class="p-4 rounded-2xl border bg-slate-800/60 space-y-2"
           :class="sessionAnswers[q.id]?.correct ? 'border-emerald-500/30' : 'border-rose-500/40'"
         >
           <div class="flex items-start justify-between gap-3">
@@ -431,12 +431,12 @@ function repeatWrongOnly() {
               !isRevealed
                 ? selectedOption === idx
                   ? 'bg-amber-500/15 border-amber-500 text-white'
-                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-600 text-slate-200'
+                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-slate-100'
                 : idx === currentQuestion.correctIndex
                   ? 'bg-emerald-500/15 border-emerald-500 text-emerald-100'
                   : selectedOption === idx
                     ? 'bg-rose-500/15 border-rose-500 text-rose-100'
-                    : 'bg-slate-950/40 border-slate-800/60 text-slate-400 opacity-75'
+                    : 'bg-slate-800/40 border-slate-700/60 text-slate-400 opacity-75'
             ]"
           >
             <div
@@ -507,7 +507,7 @@ function repeatWrongOnly() {
               @change="(e) => savePersonalNote(currentQuestion!.id, (e.target as HTMLInputElement).value)"
               type="text"
               placeholder="✏️ Eigene Notiz oder eigene Eselsbrücke zu dieser Frage speichern..."
-              class="w-full bg-slate-950/70 border border-slate-800 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+              class="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder:text-slate-400 focus:outline-none"
             />
           </div>
         </div>

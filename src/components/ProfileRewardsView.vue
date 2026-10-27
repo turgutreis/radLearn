@@ -102,31 +102,31 @@ function submitNewReward() {
 
         <!-- Quick Account Metrics -->
         <div class="grid grid-cols-3 gap-3 w-full lg:w-auto">
-          <div class="bg-slate-950/80 border border-rose-500/30 rounded-2xl p-4 text-center min-w-[110px]">
+          <div class="bg-slate-800/80 border border-rose-500/30 rounded-2xl p-4 text-center min-w-[110px]">
             <div class="flex items-center justify-center gap-1 text-rose-400 text-xs font-bold">
               <Heart class="w-3.5 h-3.5 fill-rose-400" />
               <span>Guthaben</span>
             </div>
             <div class="text-2xl font-extrabold text-white mt-1">{{ availableCoins }}</div>
-            <div class="text-[11px] text-slate-400">Belohnungs-Punkte</div>
+            <div class="text-[11px] text-slate-300">Belohnungs-Punkte</div>
           </div>
 
-          <div class="bg-slate-950/80 border border-amber-500/30 rounded-2xl p-4 text-center min-w-[110px]">
+          <div class="bg-slate-800/80 border border-amber-500/30 rounded-2xl p-4 text-center min-w-[110px]">
             <div class="flex items-center justify-center gap-1 text-amber-400 text-xs font-bold">
               <Flame class="w-3.5 h-3.5 fill-amber-400" />
               <span>Streak</span>
             </div>
             <div class="text-2xl font-extrabold text-white mt-1">{{ userProfile.streakDays }}</div>
-            <div class="text-[11px] text-slate-400">Tage in Folge</div>
+            <div class="text-[11px] text-slate-300">Tage in Folge</div>
           </div>
 
-          <div class="bg-slate-950/80 border border-cyan-500/30 rounded-2xl p-4 text-center min-w-[110px]">
+          <div class="bg-slate-800/80 border border-cyan-500/30 rounded-2xl p-4 text-center min-w-[110px]">
             <div class="flex items-center justify-center gap-1 text-cyan-400 text-xs font-bold">
               <Star class="w-3.5 h-3.5 fill-cyan-400" />
               <span>Gesamt-XP</span>
             </div>
             <div class="text-2xl font-extrabold text-white mt-1">{{ userProfile.xp }}</div>
-            <div class="text-[11px] text-slate-400">Erfahrungspunkte</div>
+            <div class="text-[11px] text-slate-300">Erfahrungspunkte</div>
           </div>
         </div>
       </div>
@@ -134,7 +134,7 @@ function submitNewReward() {
       <!-- Level Progress & Daily Goal Bars -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
         <!-- Level XP Bar -->
-        <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 space-y-2">
           <div class="flex items-center justify-between text-xs">
             <span class="font-bold text-slate-200">
               Nächster Rang: <strong class="text-amber-300">{{ levelInfo.next.badge }} {{ levelInfo.next.title }}</strong>
@@ -152,7 +152,7 @@ function submitNewReward() {
         </div>
 
         <!-- Daily Goal Bar -->
-        <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div class="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 space-y-2">
           <div class="flex items-center justify-between text-xs">
             <span class="font-bold text-slate-200">
               Tagesziel (+50 Bonus-Punkte):
@@ -204,7 +204,7 @@ function submitNewReward() {
               v-model="newRewardEmoji"
               type="text"
               placeholder="🍣"
-              class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
             />
           </div>
           <div class="sm:col-span-2">
@@ -213,7 +213,7 @@ function submitNewReward() {
               v-model="newRewardTitle"
               type="text"
               placeholder="z.B. Italienisch essen gehen / Blumenstrauß"
-              class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
             />
           </div>
           <div>
@@ -223,7 +223,7 @@ function submitNewReward() {
               type="number"
               step="50"
               min="50"
-              class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
             />
           </div>
           <div class="sm:col-span-4">
@@ -232,7 +232,7 @@ function submitNewReward() {
               v-model="newRewardDesc"
               type="text"
               placeholder="Worauf darf sie sich freuen?"
-              class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
             />
           </div>
         </div>
@@ -292,11 +292,11 @@ function submitNewReward() {
 
             <!-- Progress towards this reward -->
             <div class="space-y-1 pt-1">
-              <div class="flex justify-between text-[11px] text-slate-400">
+              <div class="flex justify-between text-[11px] text-slate-300">
                 <span>Fortschritt</span>
                 <span>{{ Math.min(availableCoins, reward.cost) }} / {{ reward.cost }} Pkt.</span>
               </div>
-              <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div
                   class="h-full bg-gradient-to-r from-rose-500 to-amber-400 transition-all"
                   :style="{ width: `${Math.min(100, Math.round((availableCoins / reward.cost) * 100))}%` }"
@@ -343,7 +343,7 @@ function submitNewReward() {
           v-for="v in userProfile.vouchers"
           :key="v.id"
           class="p-4 rounded-2xl border flex items-center justify-between gap-4"
-          :class="v.fulfilled ? 'bg-slate-950/40 border-slate-800 opacity-60' : 'bg-amber-500/10 border-amber-500/40'"
+          :class="v.fulfilled ? 'bg-slate-800/40 border-slate-700 opacity-60' : 'bg-amber-500/10 border-amber-500/40'"
         >
           <div class="flex items-center gap-3">
             <span class="text-3xl">{{ v.emoji }}</span>
@@ -409,7 +409,7 @@ function submitNewReward() {
           :class="
             userProfile.xp >= tier.minXp
               ? 'bg-amber-500/15 border-amber-500/50 text-white'
-              : 'bg-slate-950/50 border-slate-800 text-slate-500'
+              : 'bg-slate-800/50 border-slate-700 text-slate-400'
           "
         >
           <div class="text-2xl">{{ tier.badge }}</div>

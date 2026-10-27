@@ -40,7 +40,7 @@ const filteredDecks = computed(() => {
           v-model="searchQuery"
           type="text"
           placeholder="Nach Begriff, § oder Zahl suchen..."
-          class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:border-amber-500"
         />
       </div>
     </div>
