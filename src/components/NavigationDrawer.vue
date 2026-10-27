@@ -11,9 +11,14 @@ import {
   ChevronRight,
   Cloud,
   Download,
-  Upload
+  Upload,
+  Sun,
+  Moon
 } from 'lucide-vue-next'
 import type { UserProfile } from '../types'
+import { useTheme } from '../composables/useTheme'
+
+const { currentTheme, toggleTheme } = useTheme()
 
 const props = defineProps<{
   isOpen: boolean
@@ -203,8 +208,29 @@ function handleSelectTab(tab: string) {
             </button>
           </div>
 
-          <!-- Drawer Footer Tools (Cloud Sync, Backup, Reset) -->
+          <!-- Drawer Footer Tools (Theme Switch, Cloud Sync, Backup, Reset) -->
           <div class="pt-4 mt-6 border-t border-slate-800 space-y-2">
+            <!-- Theme Mode Switch -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+              <div class="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <Sun v-if="currentTheme === 'light'" class="w-4 h-4 text-amber-500" />
+                <Moon v-else class="w-4 h-4 text-amber-400" />
+                <span>Erscheinungsbild</span>
+              </div>
+              <button
+                type="button"
+                @click="toggleTheme"
+                class="px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                :class="
+                  currentTheme === 'light'
+                    ? 'bg-amber-500/20 text-amber-600 border border-amber-500/40'
+                    : 'bg-slate-800 text-slate-200 border border-slate-700'
+                "
+              >
+                {{ currentTheme === 'light' ? '☀️ Hell' : '🌙 Dunkel' }}
+              </button>
+            </div>
+
             <button
               type="button"
               @click="emit('close'); emit('openCloud')"

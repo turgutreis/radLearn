@@ -6,9 +6,14 @@ import {
   Heart,
   Cloud,
   Check,
-  Menu
+  Menu,
+  Sun,
+  Moon
 } from 'lucide-vue-next'
 import type { UserProfile } from '../types'
+import { useTheme } from '../composables/useTheme'
+
+const { currentTheme, toggleTheme } = useTheme()
 
 const props = defineProps<{
   activeTab: string
@@ -141,6 +146,18 @@ const emit = defineEmits<{
             }}
           </span>
           <Check v-if="cloudSyncStatus === 'synced'" class="w-3 h-3 text-emerald-400 hidden sm:inline" />
+        </button>
+
+        <!-- Theme Toggle Button (Dark / Light) -->
+        <button
+          type="button"
+          @click="toggleTheme"
+          class="p-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition"
+          :title="currentTheme === 'dark' ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'"
+          :aria-label="currentTheme === 'dark' ? 'Zu hellem Modus wechseln' : 'Zu dunklem Modus wechseln'"
+        >
+          <Sun v-if="currentTheme === 'dark'" class="w-4 h-4 text-amber-400 hover:rotate-45 transition-transform" />
+          <Moon v-else class="w-4 h-4 text-indigo-500 hover:-rotate-12 transition-transform" />
         </button>
 
         <!-- Mobile Drawer Toggle Button -->
