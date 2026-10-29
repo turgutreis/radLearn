@@ -7,7 +7,9 @@ export const STORAGE_KEYS = {
   PROGRESS: 'radlearn_progress_v1',
   PROFILE: 'radlearn_user_profile_v2', // v2 = Strengeres Punkte- & Preis-Balancing!
   AI_SETTINGS: 'radlearn_ai_settings_v1',
-  SUPABASE_CONFIG: 'radlearn_supabase_config_v1'
+  SUPABASE_CONFIG: 'radlearn_supabase_config_v1',
+  QUIZ_SESSIONS: 'radlearn_quiz_sessions_v1',
+  FLASHCARD_SESSIONS: 'radlearn_flashcard_sessions_v1'
 }
 
 export function loadJson<T>(key: string, fallback: T): T {

@@ -13,6 +13,7 @@ import {
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
 import type { Question } from '../types'
+import { STORAGE_KEYS, loadJson } from '../services/storageKeys'
 
 const props = defineProps<{
   initialDeckId?: string
@@ -29,15 +30,8 @@ const onlyUnmastered = ref<boolean>(false)
 const currentIndex = ref<number>(0)
 const isFlipped = ref<boolean>(false)
 
-watch(
-  () => props.initialDeckId,
-  (val) => {
-    if (val) {
-      selectedDeckId.value = val
-      currentIndex.value = 0
-      isFlipped.value = false
-    }
-  }
+const savedFlashcardIndexMap = ref<Record<string, number>>(
+  loadJson<Record<string, number>>(STORAGE_KEYS.FLASHCARD_SESSIONS, {})
 )
 
 const filteredCards = computed<Question[]>(() => {
@@ -49,9 +43,39 @@ const filteredCards = computed<Question[]>(() => {
   })
 })
 
-watch([selectedDeckId, onlyUnmastered], () => {
-  currentIndex.value = 0
+function persistFlashcardIndex() {
+  savedFlashcardIndexMap.value[selectedDeckId.value] = currentIndex.value
+  try {
+    localStorage.setItem(STORAGE_KEYS.FLASHCARD_SESSIONS, JSON.stringify(savedFlashcardIndexMap.value))
+  } catch {}
+}
+
+function restoreFlashcardIndex() {
+  const saved = savedFlashcardIndexMap.value[selectedDeckId.value]
+  if (typeof saved === 'number' && filteredCards.value.length > 0) {
+    currentIndex.value = Math.min(Math.max(0, saved), filteredCards.value.length - 1)
+  } else {
+    currentIndex.value = 0
+  }
   isFlipped.value = false
+}
+
+watch(
+  () => props.initialDeckId,
+  (val) => {
+    if (val && val !== selectedDeckId.value) {
+      selectedDeckId.value = val
+      restoreFlashcardIndex()
+    }
+  }
+)
+
+watch([selectedDeckId, onlyUnmastered], () => {
+  restoreFlashcardIndex()
+}, { immediate: true })
+
+watch(currentIndex, () => {
+  persistFlashcardIndex()
 })
 
 const currentCard = computed<Question | undefined>(() => filteredCards.value[currentIndex.value])

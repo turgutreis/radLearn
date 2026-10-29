@@ -16,6 +16,7 @@ import {
   Filter
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
+import { useQuizSessionStore } from '../composables/useQuizSessionStore'
 import type { Question } from '../types'
 
 const props = defineProps<{
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>()
 
 const { allDecks, folders, getDeckQuestions, getProgress, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
+const { getSession, saveSession, clearSession } = useQuizSessionStore()
 
 function getFolderDecks(folderId: string) {
   return allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
@@ -31,16 +33,7 @@ function getFolderDecks(folderId: string) {
 const selectedDeckId = ref<string>(props.initialDeckId || 'all')
 const examMode = ref<boolean>(false) // false = Sofort-Feedback (Lernmodus), true = Prüfungsmodus
 const shuffleQuestions = ref<boolean>(false)
-
-watch(
-  () => props.initialDeckId,
-  (newVal) => {
-    if (newVal) {
-      selectedDeckId.value = newVal
-      restartQuiz()
-    }
-  }
-)
+const wasResumed = ref<boolean>(false)
 
 const rawQuestions = computed<Question[]>(() => getDeckQuestions(selectedDeckId.value))
 
@@ -49,6 +42,7 @@ const currentIndex = ref(0)
 const selectedOption = ref<number | null>(null)
 const isRevealed = ref(false)
 const sessionAnswers = ref<Record<string, { selected: number; correct: boolean }>>({})
+const recordedInSession = ref<Set<string>>(new Set())
 const isFinished = ref(false)
 
 function shuffleOptionsForQuestion(q: Question): Question {
@@ -67,7 +61,7 @@ function shuffleOptionsForQuestion(q: Question): Question {
   }
 }
 
-function buildQuestionList() {
+function buildQuestionList(): Question[] {
   const list = rawQuestions.value.map((q) => shuffleOptionsForQuestion(q))
   if (shuffleQuestions.value) {
     for (let i = list.length - 1; i > 0; i--) {
@@ -75,24 +69,84 @@ function buildQuestionList() {
       ;[list[i], list[j]] = [list[j], list[i]]
     }
   }
-  activeQuestions.value = list
+  return list
 }
 
-const recordedInSession = ref<Set<string>>(new Set())
+function persistCurrentSession() {
+  if (activeQuestions.value.length === 0) return
+  if (isFinished.value) {
+    clearSession(selectedDeckId.value)
+    return
+  }
+  saveSession(selectedDeckId.value, {
+    deckId: selectedDeckId.value,
+    currentIndex: currentIndex.value,
+    activeQuestions: activeQuestions.value,
+    sessionAnswers: sessionAnswers.value,
+    recordedInSession: Array.from(recordedInSession.value),
+    selectedOption: selectedOption.value,
+    isRevealed: isRevealed.value,
+    examMode: examMode.value,
+    shuffleQuestions: shuffleQuestions.value,
+    isFinished: false,
+    savedAt: new Date().toISOString()
+  })
+}
 
-function restartQuiz() {
-  buildQuestionList()
+function loadOrCreateQuiz(forceRestart = false) {
+  if (!forceRestart) {
+    const saved = getSession(selectedDeckId.value)
+    if (saved && !saved.isFinished && Array.isArray(saved.activeQuestions) && saved.activeQuestions.length > 0) {
+      activeQuestions.value = saved.activeQuestions
+      currentIndex.value = Math.min(saved.currentIndex, saved.activeQuestions.length - 1)
+      selectedOption.value = saved.selectedOption
+      isRevealed.value = saved.isRevealed
+      sessionAnswers.value = saved.sessionAnswers || {}
+      recordedInSession.value = new Set(saved.recordedInSession || [])
+      examMode.value = saved.examMode ?? false
+      isFinished.value = false
+      wasResumed.value = saved.currentIndex > 0 || Object.keys(saved.sessionAnswers || {}).length > 0
+      return
+    }
+  }
+
+  // Fresh start
+  clearSession(selectedDeckId.value)
+  activeQuestions.value = buildQuestionList()
   currentIndex.value = 0
   selectedOption.value = null
   isRevealed.value = false
   sessionAnswers.value = {}
   recordedInSession.value = new Set()
   isFinished.value = false
+  wasResumed.value = false
 }
 
-watch([selectedDeckId, shuffleQuestions], () => {
-  restartQuiz()
+function restartQuiz(forceRestart = true) {
+  loadOrCreateQuiz(forceRestart)
+}
+
+watch(
+  () => props.initialDeckId,
+  (newVal) => {
+    if (newVal && newVal !== selectedDeckId.value) {
+      selectedDeckId.value = newVal
+      loadOrCreateQuiz(false)
+    }
+  }
+)
+
+watch(selectedDeckId, () => {
+  loadOrCreateQuiz(false)
 }, { immediate: true })
+
+watch(shuffleQuestions, () => {
+  loadOrCreateQuiz(true)
+})
+
+watch([currentIndex, selectedOption, isRevealed, sessionAnswers, isFinished], () => {
+  persistCurrentSession()
+}, { deep: true })
 
 const currentQuestion = computed<Question | undefined>(() => activeQuestions.value[currentIndex.value])
 const currentProgress = computed(() => (currentQuestion.value ? getProgress(currentQuestion.value.id) : null))
@@ -232,13 +286,40 @@ function repeatWrongOnly() {
 
         <button
           type="button"
-          @click="restartQuiz"
+          @click="restartQuiz(true)"
           class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
           title="Quiz neu starten"
         >
           <RotateCcw class="w-4 h-4" />
         </button>
       </div>
+    </div>
+
+    <!-- Resume indicator banner -->
+    <div
+      v-if="wasResumed && !isFinished && activeQuestions.length > 0"
+      class="bg-amber-500/15 border border-amber-500/40 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 text-xs text-amber-200 shadow-md"
+    >
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-7 h-7 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+          <RotateCcw class="w-4 h-4 text-amber-400" />
+        </div>
+        <div class="min-w-0">
+          <p class="font-bold text-white truncate">
+            Quiz fortgesetzt bei Frage {{ currentIndex + 1 }} von {{ activeQuestions.length }}
+          </p>
+          <p class="text-[11px] text-amber-300/80 hidden sm:block">
+            Dein Fortschritt wurde gespeichert. Du kannst direkt weitermachen.
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        @click="restartQuiz(true)"
+        class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 shrink-0 transition"
+      >
+        Von vorne beginnen
+      </button>
     </div>
 
     <!-- Empty state -->
@@ -304,7 +385,7 @@ function repeatWrongOnly() {
         </button>
         <button
           type="button"
-          @click="restartQuiz"
+          @click="restartQuiz(true)"
           class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-sm transition flex items-center gap-2"
         >
           <RotateCcw class="w-4 h-4" />

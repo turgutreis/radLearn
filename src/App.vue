@@ -27,6 +27,7 @@ import {
   GraduationCap
 } from 'lucide-vue-next'
 import { useStudyStore } from './composables/useStudyStore'
+import { useQuizSessionStore } from './composables/useQuizSessionStore'
 import QuizMode from './components/QuizMode.vue'
 import FlashcardMode from './components/FlashcardMode.vue'
 import MatchingTrainer from './components/MatchingTrainer.vue'
@@ -44,6 +45,8 @@ const activeTab = ref<TabId>('dashboard')
 const activeDeckId = ref<string>('all')
 const showCloudModal = ref<boolean>(false)
 const isMobileMenuOpen = ref<boolean>(false)
+
+const { getResumeInfo } = useQuizSessionStore()
 
 const {
   allDecks,
@@ -398,7 +401,7 @@ function confirmResetProgress() {
                 class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-extrabold text-sm flex items-center gap-2 transition shadow-lg shadow-amber-500/20"
               >
                 <Zap class="w-4 h-4" />
-                10-Fragen Tages-Workout
+                <span>{{ getResumeInfo('workout') ? `Workout fortsetzen (${getResumeInfo('workout')!.currentIndex + 1}/10)` : '10-Fragen Tages-Workout' }}</span>
               </button>
 
               <button
@@ -407,7 +410,7 @@ function confirmResetProgress() {
                 class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold text-sm flex items-center gap-2 transition"
               >
                 <Play class="w-4 h-4 text-amber-400" />
-                Alle Fragen ({{ overallStats.total }})
+                <span>{{ getResumeInfo('all') ? `Weiter bei Frage ${getResumeInfo('all')!.currentIndex + 1} (${overallStats.total})` : `Alle Fragen (${overallStats.total})` }}</span>
               </button>
 
               <button
@@ -607,9 +610,13 @@ function confirmResetProgress() {
                   title="Alle Fragen dieses Ordners trainieren"
                 >
                   <Zap class="w-3.5 h-3.5" />
-                  <span class="hidden sm:inline">Ganzen Ordner trainieren</span>
-                  <span class="sm:hidden">Ordner üben</span>
-                  <span class="text-[11px] opacity-80">({{ getFolderStats(folder.id).total }})</span>
+                  <span class="hidden sm:inline">
+                    {{ getResumeInfo(`folder:${folder.id}`) ? `Weiter bei Frage ${getResumeInfo(`folder:${folder.id}`)!.currentIndex + 1} (${getFolderStats(folder.id).total})` : 'Ganzen Ordner trainieren' }}
+                  </span>
+                  <span class="sm:hidden">
+                    {{ getResumeInfo(`folder:${folder.id}`) ? `Weiter (${getResumeInfo(`folder:${folder.id}`)!.currentIndex + 1})` : 'Ordner üben' }}
+                  </span>
+                  <span v-if="!getResumeInfo(`folder:${folder.id}`)" class="text-[11px] opacity-80">({{ getFolderStats(folder.id).total }})</span>
                 </button>
 
                 <button
@@ -706,10 +713,18 @@ function confirmResetProgress() {
                     <button
                       type="button"
                       @click="startQuizForDeck(deck.id)"
-                      class="px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                      class="px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                      :class="
+                        getResumeInfo(deck.id)
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 ring-2 ring-amber-400/40 shadow-md shadow-amber-500/20'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                      "
+                      :title="getResumeInfo(deck.id) ? `Weiter bei Frage ${getResumeInfo(deck.id)!.currentIndex + 1}` : 'MC-Quiz starten'"
                     >
                       <CheckSquare class="w-3.5 h-3.5" />
-                      MC-Quiz
+                      <span>
+                        {{ getResumeInfo(deck.id) ? `Weiter (Frage ${getResumeInfo(deck.id)!.currentIndex + 1})` : 'MC-Quiz' }}
+                      </span>
                     </button>
                     <button
                       type="button"
