@@ -151,6 +151,17 @@ export function useStudyStore() {
     return newDeck
   }
 
+  function updateQuestion(updated: Question) {
+    progressStore.updateQuestion(updated)
+    if (cloudSync.isCloudConfigured.value) {
+      const parentDeck = deckStore.allDecks.value.find((d) => d.id === updated.deckId)
+      if (parentDeck) {
+        const deckQs = progressStore.customQuestions.value.filter((q) => q.deckId === updated.deckId)
+        upsertCloudDeck(cloudSync.supabaseConfig.value, parentDeck, deckQs).catch(console.error)
+      }
+    }
+  }
+
   async function deleteCustomDeck(deckId: string) {
     deckStore.customDecks.value = deckStore.customDecks.value.filter((d) => d.id !== deckId)
     progressStore.customQuestions.value = progressStore.customQuestions.value.filter((q) => q.deckId !== deckId)
@@ -227,6 +238,7 @@ export function useStudyStore() {
     getDeckQuestions,
     getDeckStats,
     getProgress: progressStore.getProgress,
+    updateQuestion,
     recordAnswer,
     recordFlashcardRating,
     rewardMatchingRound,

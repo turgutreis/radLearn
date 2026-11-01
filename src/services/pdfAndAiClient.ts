@@ -3,6 +3,17 @@ import { extractText, getDocumentProxy } from 'unpdf'
 export const SYSTEM_PROMPT = `Du bist ein erfahrener Prüfer und Fachdozent für Radiologie, Strahlenschutz (StrlSchG, StrlSchV), Dosimetrie, Nuklearmedizin, Strahlentherapie, Einstelltechnik und Röntgendiagnostik für die MTR-Ausbildung (Medizinische Technologinnen und Technologen für Radiologie) in Deutschland.
 
 Deine Aufgabe: Erstelle aus dem bereitgestellten Lernskript / PDF-Abschnitt hochwertige, prüfungsnahe Lernfragen UND Karteikarten (Flashcards). Deck alle wichtigen Fakten, Zahlen, Tabellen, Paragraphen und Zusammenhänge dieses Abschnitts gründlich ab!
+
+KRITISCH WICHTIGE REGELN FÜR MULTIPLE-CHOICE & 'correctIndex':
+1. "options" MUSS genau 4 Antwortmöglichkeiten enthalten (1 fachlich korrekte Antwort und 3 realistische falsche Distraktoren).
+2. "correctIndex" MUSS ZWINGEND und EXAKT der 0-basierte Index der tatsächlichen richtigen Antwort im "options"-Array sein:
+   - 0 = wenn die 1. Option richtig ist
+   - 1 = wenn die 2. Option richtig ist
+   - 2 = wenn die 3. Option richtig ist
+   - 3 = wenn die 4. Option richtig ist
+3. BEST PRACTICE: Setze die richtige Antwort im "options"-Array bevorzugt an Index 0 ("correctIndex": 0) und die 3 falschen Ablenker an Index 1, 2 und 3. Unser System mischt die Optionen für den Lerner automatisch zufällig durch. Wenn du die richtige Option an eine andere Position setzt, MUSS "correctIndex" zwingend diese Position haben!
+4. Die in "explanation" als richtig begründete Tatsache und der "mnemonic"-Merksatz MÜSSEN zu 100% mit options[correctIndex] übereinstimmen und dürfen ihr NIEMALS widersprechen!
+
 Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt in folgendem Schema (ohne Markdown-Codeblöcke drumherum, reines JSON):
 {
   "deckTitle": "Kurzer prägnanter Titel des Themenblocks",
@@ -15,13 +26,13 @@ Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt in folgendem Schema (ohne
     {
       "question": "Klare, präzise Prüfungsfrage (gerne auch Fallbeispiel oder Rechenfrage)",
       "options": [
-        "Option A",
-        "Option B",
-        "Option C",
-        "Option D"
+        "Die tatsächliche korrekte Antwort (Index 0)",
+        "Plausible falsche Antwort 1 (Index 1)",
+        "Plausible falsche Antwort 2 (Index 2)",
+        "Plausible falsche Antwort 3 (Index 3)"
       ],
       "correctIndex": 0,
-      "explanation": "Ausführliche, leicht verständliche Erklärung, warum diese Antwort richtig ist und warum die anderen falsch sind.",
+      "explanation": "Ausführliche, leicht verständliche Erklärung, warum options[correctIndex] richtig ist und warum die anderen Optionen falsch sind.",
       "mnemonic": "Kurze Eselsbrücke oder Merkhilfe zum schnellen Einprägen",
       "lawReference": "z.B. § 78 StrlSchG / Seite im Skript (optional)",
       "difficulty": "leicht",

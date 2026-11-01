@@ -9,9 +9,11 @@ import {
   Bookmark,
   Filter,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Edit3
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
+import EditQuestionModal from './EditQuestionModal.vue'
 import type { Question } from '../types'
 import { STORAGE_KEYS, loadJson } from '../services/storageKeys'
 
@@ -19,7 +21,7 @@ const props = defineProps<{
   initialDeckId?: string
 }>()
 
-const { allDecks, folders, getDeckQuestions, getProgress, recordFlashcardRating, toggleBookmark } = useStudyStore()
+const { allDecks, folders, getDeckQuestions, getProgress, updateQuestion, recordFlashcardRating, toggleBookmark } = useStudyStore()
 
 function getFolderDecks(folderId: string) {
   return allDecks.value.filter((d) => (d.folderId || 'custom') === folderId)
@@ -29,6 +31,7 @@ const selectedDeckId = ref<string>(props.initialDeckId || 'all')
 const onlyUnmastered = ref<boolean>(false)
 const currentIndex = ref<number>(0)
 const isFlipped = ref<boolean>(false)
+const isEditModalOpen = ref<boolean>(false)
 
 const savedFlashcardIndexMap = ref<Record<string, number>>(
   loadJson<Record<string, number>>(STORAGE_KEYS.FLASHCARD_SESSIONS, {})
@@ -109,6 +112,11 @@ function exportAnkiTsv() {
   a.download = `Anki_Export_${selectedDeckId.value}.txt`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function handleSaveCard(updated: Question) {
+  updateQuestion(updated)
+  isEditModalOpen.value = false
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -240,18 +248,29 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </span>
           </div>
 
-          <button
-            type="button"
-            @click.stop="toggleBookmark(currentCard.id)"
-            class="p-2 rounded-xl border transition"
-            :class="
-              currentProgress?.bookmarked
-                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                : 'bg-slate-800/70 border-slate-700 text-slate-400 hover:text-white'
-            "
-          >
-            <Bookmark class="w-4 h-4" :class="{ 'fill-amber-400': currentProgress?.bookmarked }" />
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click.stop="isEditModalOpen = true"
+              class="p-2 rounded-xl border border-slate-700 bg-slate-800/70 text-slate-400 hover:text-amber-300 transition"
+              title="Karte korrigieren oder anpassen"
+            >
+              <Edit3 class="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              @click.stop="toggleBookmark(currentCard.id)"
+              class="p-2 rounded-xl border transition"
+              :class="
+                currentProgress?.bookmarked
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                  : 'bg-slate-800/70 border-slate-700 text-slate-400 hover:text-white'
+              "
+            >
+              <Bookmark class="w-4 h-4" :class="{ 'fill-amber-400': currentProgress?.bookmarked }" />
+            </button>
+          </div>
         </div>
 
         <!-- Card Body -->
@@ -355,5 +374,13 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         </button>
       </div>
     </div>
+
+    <!-- Edit Question Modal -->
+    <EditQuestionModal
+      :is-open="isEditModalOpen"
+      :question="currentCard || null"
+      @close="isEditModalOpen = false"
+      @save="handleSaveCard"
+    />
   </div>
 </template>

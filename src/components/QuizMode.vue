@@ -13,17 +13,19 @@ import {
   Scale,
   Calculator,
   HelpCircle,
-  Filter
+  Filter,
+  Edit3
 } from 'lucide-vue-next'
 import { useStudyStore } from '../composables/useStudyStore'
 import { useQuizSessionStore } from '../composables/useQuizSessionStore'
+import EditQuestionModal from './EditQuestionModal.vue'
 import type { Question } from '../types'
 
 const props = defineProps<{
   initialDeckId?: string
 }>()
 
-const { allDecks, folders, getDeckQuestions, getProgress, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
+const { allDecks, folders, getDeckQuestions, getProgress, updateQuestion, recordAnswer, toggleBookmark, savePersonalNote } = useStudyStore()
 const { getSession, saveSession, clearSession } = useQuizSessionStore()
 
 function getFolderDecks(folderId: string) {
@@ -34,6 +36,7 @@ const selectedDeckId = ref<string>(props.initialDeckId || 'all')
 const examMode = ref<boolean>(false) // false = Sofort-Feedback (Lernmodus), true = Prüfungsmodus
 const shuffleQuestions = ref<boolean>(false)
 const wasResumed = ref<boolean>(false)
+const isEditModalOpen = ref<boolean>(false)
 
 const rawQuestions = computed<Question[]>(() => getDeckQuestions(selectedDeckId.value))
 
@@ -222,6 +225,24 @@ function repeatWrongOnly() {
   isRevealed.value = false
   sessionAnswers.value = {}
   isFinished.value = false
+}
+
+function handleSaveEditedQuestion(updated: Question) {
+  updateQuestion(updated)
+  if (currentQuestion.value && currentQuestion.value.id === updated.id) {
+    activeQuestions.value[currentIndex.value] = { ...updated }
+    const currentSessionAnswer = sessionAnswers.value[updated.id]
+    if (currentSessionAnswer !== undefined) {
+      const isNowCorrect = currentSessionAnswer.selected === updated.correctIndex
+      sessionAnswers.value[updated.id] = {
+        selected: currentSessionAnswer.selected,
+        correct: isNowCorrect
+      }
+      recordAnswer(updated.id, isNowCorrect)
+    }
+    persistCurrentSession()
+  }
+  isEditModalOpen.value = false
 }
 </script>
 
@@ -480,19 +501,31 @@ function repeatWrongOnly() {
             </span>
           </div>
 
-          <button
-            type="button"
-            @click="toggleBookmark(currentQuestion.id)"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition"
-            :class="
-              currentProgress?.bookmarked
-                ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
-            "
-          >
-            <Bookmark class="w-3.5 h-3.5" :class="{ 'fill-amber-400': currentProgress?.bookmarked }" />
-            {{ currentProgress?.bookmarked ? 'Gemerkt' : 'Merken' }}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="isEditModalOpen = true"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border bg-slate-800/60 border-slate-700 text-slate-300 hover:text-amber-300 hover:border-amber-500/40 transition"
+              title="Frage oder richtige Antwort korrigieren"
+            >
+              <Edit3 class="w-3.5 h-3.5 text-amber-400" />
+              <span>Korrigieren</span>
+            </button>
+
+            <button
+              type="button"
+              @click="toggleBookmark(currentQuestion.id)"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition"
+              :class="
+                currentProgress?.bookmarked
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                  : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200'
+              "
+            >
+              <Bookmark class="w-3.5 h-3.5" :class="{ 'fill-amber-400': currentProgress?.bookmarked }" />
+              {{ currentProgress?.bookmarked ? 'Gemerkt' : 'Merken' }}
+            </button>
+          </div>
         </div>
 
         <!-- Question Text -->
@@ -628,5 +661,13 @@ function repeatWrongOnly() {
         </div>
       </div>
     </div>
+
+    <!-- Edit Question Modal -->
+    <EditQuestionModal
+      :is-open="isEditModalOpen"
+      :question="currentQuestion || null"
+      @close="isEditModalOpen = false"
+      @save="handleSaveEditedQuestion"
+    />
   </div>
 </template>

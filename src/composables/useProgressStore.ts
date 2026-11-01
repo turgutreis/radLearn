@@ -313,6 +313,15 @@ export function useProgressStore() {
     ]
   }
 
+  function updateQuestion(updated: Question) {
+    const idx = customQuestions.value.findIndex((q) => q.id === updated.id)
+    if (idx !== -1) {
+      customQuestions.value[idx] = { ...updated }
+    } else {
+      customQuestions.value.push({ ...updated })
+    }
+  }
+
   return {
     customQuestions,
     progressMap,
@@ -320,6 +329,7 @@ export function useProgressStore() {
     overallStats,
     getDeckQuestions,
     getProgress,
+    updateQuestion,
     recordAnswer,
     recordFlashcardRating,
     rewardMatchingRound,
