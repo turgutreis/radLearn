@@ -91,10 +91,19 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+const PREFERRED_GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-flash-lite-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-3.5-flash',
+  'gemini-3.8-flash'
+]
+
 async function listAvailableGeminiModels(apiKey: string): Promise<string[]> {
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
-    if (!res.ok) return []
+    if (!res.ok) return PREFERRED_GEMINI_MODELS
     const data = await res.json()
     const models: Array<{ name: string; supportedGenerationMethods?: string[] }> = data?.models || []
     const candidates = models
@@ -107,15 +116,33 @@ async function listAvailableGeminiModels(apiKey: string): Promise<string[]> {
           !name.includes('vision') &&
           !name.includes('imagen') &&
           !name.includes('tts') &&
-          !name.includes('audio')
+          !name.includes('audio') &&
+          !name.includes('omni') &&
+          !name.includes('transcribe') &&
+          !name.includes('image') &&
+          !name.includes('customtools') &&
+          !name.includes('banana') &&
+          !name.includes('2.5-flash') &&
+          !name.includes('2.5-pro')
       )
 
-    // Sortiere so, dass Flash- und Lite-Modelle zuerst kommen (schnell & hohe Verfügbarkeit)
-    const flash = candidates.filter((n) => n.includes('flash')).sort().reverse()
-    const rest = candidates.filter((n) => !n.includes('flash')).sort().reverse()
-    return [...flash, ...rest]
+    // Sortiere nach Priorität: Schnelle, stabile Flash-Lite Modelle zuerst
+    const sorted = candidates.sort((a, b) => {
+      const idxA = PREFERRED_GEMINI_MODELS.indexOf(a)
+      const idxB = PREFERRED_GEMINI_MODELS.indexOf(b)
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB
+      if (idxA !== -1) return -1
+      if (idxB !== -1) return 1
+      if (a.includes('lite') && !b.includes('lite')) return -1
+      if (!a.includes('lite') && b.includes('lite')) return 1
+      if (a.includes('flash') && !b.includes('flash')) return -1
+      if (!a.includes('flash') && b.includes('flash')) return 1
+      return a.localeCompare(b)
+    })
+
+    return sorted.length > 0 ? sorted : PREFERRED_GEMINI_MODELS
   } catch {
-    return []
+    return PREFERRED_GEMINI_MODELS
   }
 }
 
@@ -195,38 +222,33 @@ export async function generateQuestionsInBrowser(params: {
 
     parts.push({ text: userPrompt })
 
-    const primaryModel = params.model || 'gemini-3.8-flash'
+    const primaryModel = params.model || 'gemini-3.5-flash-lite'
     let response = await callGeminiModel(primaryModel, params.apiKey, parts)
 
     // 1. Falls 404 (Modellname veraltet): Empfohlenes Modell aus Fehlermeldung oder /models Liste holen
     if (response.status === 404) {
       const errText = await response.text()
       const suggestedMatch = errText.match(/use models\/([a-zA-Z0-9._-]+)/i)
-      if (suggestedMatch?.[1]) {
-        response = await callGeminiModel(suggestedMatch[1], params.apiKey, parts)
-      }
-      if (response.status === 404) {
-        const available = await listAvailableGeminiModels(params.apiKey)
-        if (available.length > 0) {
-          response = await callGeminiModel(available[0], params.apiKey, parts)
-        }
-      }
+      const available = await listAvailableGeminiModels(params.apiKey)
+      const targetModel = suggestedMatch?.[1] || available[0] || 'gemini-3.5-flash-lite'
+      params.onStatusUpdate?.(`Modell veraltet – wechsle zu ${targetModel}...`)
+      response = await callGeminiModel(targetModel, params.apiKey, parts)
     }
 
     // 2. Falls 503 (High Demand / Überlastung bei Google) oder 429 (Rate Limit):
-    // Automatischer Retry mit Backoff + Ausweichen auf alternative Gemini-Modelle (z.B. flash-lite / pro)!
+    // Automatischer schneller Wechsel auf die stabilen Flash-Lite Modelle!
     if (response.status === 503 || response.status === 429) {
       const available = await listAvailableGeminiModels(params.apiKey)
-      const fallbackModels = [
-        primaryModel,
-        ...available.filter((m) => m !== primaryModel)
-      ].slice(0, 4)
+      const fallbackList = [
+        ...PREFERRED_GEMINI_MODELS,
+        ...available
+      ].filter((m, idx, arr) => arr.indexOf(m) === idx && m !== primaryModel)
 
-      for (let attempt = 1; attempt <= 4; attempt++) {
-        const waitMs = attempt * 2200
-        const nextModel = fallbackModels[attempt % fallbackModels.length] || primaryModel
+      for (let attempt = 0; attempt < Math.min(5, fallbackList.length); attempt++) {
+        const nextModel = fallbackList[attempt]
+        const waitMs = (attempt + 1) * 1200
         params.onStatusUpdate?.(
-          `Google Server ausgelastet (503) – automatischer Versuch ${attempt}/4 mit ${nextModel} in ${(waitMs / 1000).toFixed(1)}s...`
+          `Google Server überlastet (${response.status}) – wechsle automatisch zu ${nextModel}...`
         )
         await sleep(waitMs)
         response = await callGeminiModel(nextModel, params.apiKey, parts)
